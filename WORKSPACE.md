@@ -23,15 +23,15 @@ failure, and the selector's own CPU time. Lower is better.
 ## Selection and scheduling interface
 
 - `selector.select(diff, catalog)` takes unified diff text and the entries
-  from `tests.json`. It returns the test numbers to run, currently the entire
-  catalog. Selection changes belong here.
+  from `tests.json`. It returns a list of unique test numbers from the catalog,
+  currently all of them. Selection changes belong here.
 - `scheduler.schedule(selected, durations)` takes the selected test numbers
   and a mapping from test number to recorded seconds. It returns worker lists
   containing each selected number exactly once, or `[]` for no tests.
   Scheduling changes belong here.
-- The container entrypoint selects and schedules tests for each patch, then writes one
-  `{"commit": "...", "workers": [...]}` JSON line. Keep selection fixed when
-  measuring scheduling changes and scheduling fixed when measuring selection.
+- The container entrypoint selects and schedules tests for each patch and
+  writes one `{"commit": "...", "workers": [...]}` JSON line. Keep selection
+  fixed when measuring scheduling changes and vice versa.
 
 ## Reference result
 

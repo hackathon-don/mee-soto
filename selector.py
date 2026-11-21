@@ -20,7 +20,7 @@ class CatalogTest(TypedDict):
 
 
 def select(diff: str, catalog: Sequence[CatalogTest]) -> list[int]:
-    """Return the test numbers to run for one unified diff."""
+    """Return a list of unique catalog test numbers to run for one unified diff."""
     return [test["number"] for test in catalog]
 
 
