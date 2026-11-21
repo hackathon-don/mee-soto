@@ -213,3 +213,20 @@ or `autoresearch/validation.tsv` (validation split). Both are untracked so a
 reset never erases them. Columns: time, branch, commit, experiment, split,
 status, simulated seconds, miss count, missed commits, local selector CPU
 seconds, and the commit subject.
+
+## Additional queue ideas
+
+12. **Recover interrupted verification.** If an Impact child dies outside a test,
+    try one bounded same-module cohort of tests it left unrun in a fresh process.
+    Require a clean full test lifecycle for each member. Keep the entire cohort
+    on uncertainty. Leave scheduled workers and existing failure handling fixed.
+13. **Prove literal registry reads unaffected.** Apply the distinction between
+    observed first-match actions and unchanged operation results from APKeep and
+    Rust red-green queries to one literal registry. Require complete consumer
+    evidence and preserve unknowns, missing keys, dynamic bindings, precedence,
+    and whole-table access.
+14. **Amortize verification setup across a module cohort.** For groups included
+    by Impact's initial cost plan, estimate the fixed schedule cost of removing
+    an entire same-module cohort and charge its setup once. Compare this with a
+    bounded fresh verification run. Keep the cohort unless every member completes
+    an unmodified full test lifecycle successfully.
