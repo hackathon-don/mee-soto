@@ -250,3 +250,8 @@ seconds, and the commit subject.
     tests without a completed measured build trace from the optional cohort
     search. They stay selected. Reprice the eligible cohorts and require the
     same full patched-test pass evidence before dropping any member.
+
+19. **Pool complementary verification across two modules.** Use the existing
+    single cohort as a starting point. Add a bounded set from one additional
+    module only when its removal further improves the fixed schedule. Reuse one
+    strict pytest invocation and keep any test lacking a complete pass.
