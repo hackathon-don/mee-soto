@@ -276,3 +276,9 @@ seconds, and the commit subject.
     fixture unit. Separate actual key operands from unknown callers and
     phase gaps. Price the resulting upper bound with the fixed scheduler.
     Require an audited complete observer closure before any selection change.
+
+24. **Improve the prefix planner with a class-setup move.** Preserve the
+    original include-versus-verify objective. Find strict improvements from
+    moving the last runnable member of a paid-setup class back to scheduling,
+    or adding a member to a class whose setup is already paid. Keep deferral,
+    mandatory tests, and known lifecycle or budget fallbacks unchanged.
