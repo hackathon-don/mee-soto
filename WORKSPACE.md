@@ -24,13 +24,14 @@ failure, and the selector's own CPU time. Lower is better.
 
 - `config.py` defines the frozen experiment `Config`: selector and scheduler
   classes, worker count (default 3), and data directory (default `/data`).
-  `DEFAULT_CONFIG` uses `ImpactSelector` and `LptScheduler`.
+  `DEFAULT_CONFIG` uses `AllTestsSelector` and `LptScheduler`.
 - `strategies/selectors/` defines `Selector`, `CatalogTest`, and the `Patch`
   record (commit id and diff text). A selector is constructed once with
   `(catalog, config)`. Its `select(commits)` method processes the batch and
   returns a mapping from commit id to unique catalog test numbers.
   `ImpactSelector` uses coverage-mapped impact analysis and patched-tree
-  verification. `AllTestsSelector` remains available as the all-tests baseline.
+  verification and is opt-in via `Config(selector_cls=ImpactSelector)` (import
+  it from `strategies.selectors.impact`). `AllTestsSelector` is the default.
 - `strategies/schedulers/` defines `Scheduler`, constructed once with
   `(durations, config)`. Its `schedule(selected)` method returns worker lists
   containing each selected number exactly once, or `[]` for no tests, dropping
@@ -42,7 +43,7 @@ failure, and the selector's own CPU time. Lower is better.
 
 ## Reference result
 
-Using `Config(selector_cls=AllTestsSelector)` preserves the official starter's
+The default `Config()` preserves the official starter's
 behavior: run all 1,620 tests on three workers.
 The recorded all-tests reference on the 30 public patches is **1,210.470
 simulated seconds, zero misses**. The local sample scorer does not measure container

@@ -1,10 +1,12 @@
 # Blast Radius selector
 
-A submission for the Blast Radius track using coverage-mapped impact analysis
-and patched-tree verification. The default `ImpactSelector` narrows candidates
+A submission for the Blast Radius track. The default `AllTestsSelector` runs
+every test. The opt-in `ImpactSelector` uses coverage-mapped impact analysis
+and patched-tree verification to narrow candidates
 with AST, import, and fixture maps, then chooses which candidates to verify
 and which to include unrun. The final scheduler remains three-worker LPT.
-`AllTestsSelector` is available as a baseline through `Config`. See
+Enable it with `Config(selector_cls=ImpactSelector)`, importing `ImpactSelector`
+from `strategies.selectors.impact`. See
 [WORKSPACE.md](WORKSPACE.md) for the strategy interfaces and selector settings.
 
 ## The problem

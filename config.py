@@ -6,14 +6,14 @@ from pathlib import Path
 from strategies.schedulers import Scheduler
 from strategies.schedulers.lpt import LptScheduler
 from strategies.selectors import Selector
-from strategies.selectors.impact import ImpactSelector
+from strategies.selectors.all_tests import AllTestsSelector
 
 MAX_WORKERS = 8
 
 
 @dataclass(frozen=True)
 class Config:
-    selector_cls: type[Selector] = ImpactSelector
+    selector_cls: type[Selector] = AllTestsSelector
     scheduler_cls: type[Scheduler] = LptScheduler
     workers: int = 3
     data_dir: Path = Path("/data")
