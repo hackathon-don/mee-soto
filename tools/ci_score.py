@@ -38,7 +38,7 @@ def added_experiments(base: str) -> list[str]:
     added = dict.fromkeys(name for name in experiment_names("HEAD") if name not in existing)
     if any(not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_.-]*", name) for name in added):
         raise ValueError("experiment names must be safe to pass to make e2e")
-    return list(added) or ["map"]
+    return list(added)
 
 
 @dataclass(frozen=True)
@@ -96,6 +96,10 @@ def main() -> None:
         experiments = added_experiments(parser.parse_args().base)
     except (ValueError, subprocess.CalledProcessError) as error:
         parser.error(str(error))
+    if not experiments:
+        print("No new experiments to score.")
+        return
+
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     results = {experiment: [score(experiment) for _ in range(3)] for experiment in experiments}
     baseline = score("baseline")
