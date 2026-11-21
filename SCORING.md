@@ -1,6 +1,6 @@
 # How a run is scored
 
-These are the exact rules. `score.py` in this kit and the scorer on the server each follow them, and the two are compared on thousands of outputs before the event. For the same output, the simulated seconds you compute locally are the simulated seconds the server computes. The board's number also holds the CPU time your container used on the server, which `make sample` does not measure, and it is the middle of 3 runs.
+These are the exact rules. `score.py` in this kit and the scorer on the server each follow them, and the two are compared on thousands of outputs before the event. For the same output, the simulated seconds you compute locally are the simulated seconds the server computes. The board's number also holds the CPU time your container used on the server, which `make e2e` does not measure, and it is the middle of 3 runs.
 
 ## Inputs
 

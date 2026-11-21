@@ -25,7 +25,7 @@ failure, and the selector's own CPU time. Lower is better.
 
 | Command | Runs | Output |
 | --- | --- | --- |
-| `make e2e` (alias `make sample`) | Selector and scheduler in the image, under the scorer's limits, then the sample scorer | `out/e2e.jsonl` |
+| `make e2e` | Selector and scheduler in the image, under the scorer's limits, then the sample scorer | `out/e2e.jsonl` |
 | `make e2e-amd64` | Alias of `make e2e`, explicitly naming the judge's linux/amd64 architecture | `out/e2e.jsonl` |
 | `make e2e-dev` | Same limits and scorer, native architecture with a separate `blast-radius-entry-dev` image and unpinned Python base | `out/e2e-dev.jsonl` |
 | `make check` | Same run, format check only | `out/e2e.jsonl` |
@@ -71,7 +71,7 @@ modes run directly as `python3 main.py [--data DIR] [select | schedule
 
 The interface split preserves the official starter's behavior: run
 all 1,620 tests on three workers.
-On the 30 public patches, `make sample` reports **1,210.470 simulated
+On the 30 public patches, `make e2e` reports **1,210.470 simulated
 seconds, zero misses**. The local sample scorer does not measure container
 CPU; do not compare this score directly with the published leaderboard
 baseline, which is not the local sample score.

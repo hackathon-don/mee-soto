@@ -312,7 +312,7 @@ Show concrete test run commands in shell blocks, including the working directory
 
 #### RWX sample evidence
 
-- Run `make sample` from the repository root for selector, scoring, or container changes when Docker is available. State the runtime/platform (the Makefile targets `linux/amd64`), sample size, simulated seconds, and missed patches. For a comparison, run the intended base and head on the same inputs and runtime; otherwise do not claim an improvement.
+- Run `make e2e` from the repository root for selector, scoring, or container changes when Docker is available. State the runtime/platform (the Makefile targets `linux/amd64`), sample size, simulated seconds, and missed patches. For a comparison, run the intended base and head on the same inputs and runtime; otherwise do not claim an improvement.
 - Report `make check` separately. A passing format check does not establish that all failing tests were selected. If diagnosing a rejection, cite the scorer's actual rejection code.
 - Local sample scoring excludes selector CPU time and does not establish results on the hidden practice or final patches. Do not equate the sample score with the leaderboard score. If no runtime code changed, verify the changed surface and explain why a sample rerun was not needed.
 
@@ -323,7 +323,7 @@ A compact Tests block for a selector change (fill in observed results, or say wh
 <summary>Automated test evidence</summary>
 
 ```sh
-make sample
+make e2e
 make check
 ```
 
