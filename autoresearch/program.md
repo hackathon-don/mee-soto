@@ -289,3 +289,16 @@ seconds, and the commit subject.
     worker/fixture lifecycle. For the matched structural SQL assertion
     only, preserve the entire fresh typed graph modulo identity. Retain
     execution or identity observers and every unmatched test.
+
+26. **Check executor ordering before extending the fresh-copy proof.**
+    Admit only whole literal-input methods with a sealed lifecycle, no
+    implicit subplan, and an order-independent plan for every call.
+    Preserve the executor test if any relevant plan has competing ready
+    steps, dependency merge order, or mutable shared state.
+
+27. **Check nonreach through the full optimizer prefix.** For the
+    fresh-copy site, measure whether the full pinned fixture's actual
+    prefix and scope traversal ever dispatch to the changed helper.
+    An unchanged rule prefix and sealed lifecycle are prerequisites.
+    If any case reaches the site, retain unless a separate full suffix
+    and execution-equivalence proof covers it.
