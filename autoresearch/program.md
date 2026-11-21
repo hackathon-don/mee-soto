@@ -282,3 +282,10 @@ seconds, and the commit subject.
     moving the last runnable member of a paid-setup class back to scheduling,
     or adding a member to a class whose setup is already paid. Keep deferral,
     mandatory tests, and known lifecycle or budget fallbacks unchanged.
+
+25. **Prove redundant fresh-table copies for structural fixture tests.**
+    Admit one copy-flag-only edit at the audited alias-of-new-table site.
+    Confirm pinned constructors, deepcopy, scope binding, and ordinary
+    worker/fixture lifecycle. For the matched structural SQL assertion
+    only, preserve the entire fresh typed graph modulo identity. Retain
+    execution or identity observers and every unmatched test.
