@@ -302,3 +302,10 @@ seconds, and the commit subject.
     An unchanged rule prefix and sealed lifecycle are prerequisites.
     If any case reaches the site, retain unless a separate full suffix
     and execution-equivalence proof covers it.
+
+28. **Compare the full optimizer fixture's rendered SQL after serialization.**
+    On the audited fresh-copy edit, run the complete ordered compiler
+    fixture for old and new trees in fresh processes. Require exact pretty
+    SQL and exact conditional DuckDB query transcripts. Preserve the
+    original child-link check and serialization. Require a source proof
+    for shared setup and conditional execution before any test removal.
