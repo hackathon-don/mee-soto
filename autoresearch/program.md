@@ -255,3 +255,18 @@ seconds, and the commit subject.
     single cohort as a starting point. Add a bounded set from one additional
     module only when its removal further improves the fixed schedule. Reuse one
     strict pytest invocation and keep any test lacking a complete pass.
+
+20. **Recover after the deliberate failure cutoff.** Preserve the cutoff and
+    keep failed and deferred tests selected. Consider one entire cheap shared
+    fixture unit left unrun, with evidence that omitting or reordering other
+    tests cannot change its outcome. Require demonstrable fixed-schedule
+    headroom before implementing the probe.
+21. **Measure exact TPC-DS boundary replay.** For a bounded pure optimizer
+    guard change, preflight the time to replay every fixture entry through
+    parsing and the ordered typed Plan boundary, plus exact DuckDB translation.
+    Protect fixtures, setup, teardown, input order, and all opaque effects.
+    Retain the full test unless both paths and the dependency closure agree.
+22. **Reprice the residual after observed passes.** Evaluate an additional
+    disjoint complete fixture unit only if its incremental saving on the
+    actual remaining schedule exceeds its bounded verification cost.
+    Abstain when case interactions are unknown.
