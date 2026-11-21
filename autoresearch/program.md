@@ -65,8 +65,8 @@ per-person or per-run branches.
   `score.py`, `main.py`, `Makefile`, `sample/`, `tests/`, and this directory.
   The one exception is `program.md` commits from others, pulled in with new
   ideas; the driver itself still never edits it.
-- Never read `sample/answers.json`, the validation patches, or
-  `autoresearch/validation.tsv`, and never name a sample commit id in code.
+- Never read `sample/answers.json` or `autoresearch/validation.tsv`, and
+  never name a sample commit id in code.
   The loop rejects added lines that name one.
 - Never run `make autoresearch-validate`. It is for Andrew.
 - Keep the scheduler and worker count fixed when testing a selector idea, and
@@ -77,16 +77,17 @@ per-person or per-run branches.
 
 ## Benchmark
 
-- `splits.json` freezes the 30 public patches into a 21-patch search split
-  and a 9-patch validation split, stratified by answer kind. The loop only
-  ever mounts the search split's patches.
-- The validation split stays outside the loop so ideas are not tuned to it.
-  Andrew runs `make autoresearch-validate EXPERIMENT=<name>` on a kept idea
-  before promoting it, and the result goes to `validation.tsv`.
-- The leaderboard appears to run 40 patches, so a search-split gain is only a
-  candidate until validation agrees.
-- Not yet frozen here: a held-out set of mutated and historical SQLGlot
-  patches. `tools/mutants.py` and `tools/groundtruth.py` can generate one.
+- The loop tunes on all 30 public patches (the search split in
+  `splits.json`).
+- The validation split is empty for now, so nothing scores a kept idea on
+  patches it was not tuned on, and `make autoresearch-validate` stops with an
+  error. The leaderboard appears to run 40 patches, so a public-sample gain is
+  only a candidate.
+- Next: freeze a held-out set of mutated and historical SQLGlot patches as the
+  validation split (idea 7). `tools/mutants.py` and `tools/groundtruth.py` can
+  generate one. Andrew then runs `make autoresearch-validate EXPERIMENT=<name>`
+  on a kept idea before promoting it, and the result goes to
+  `validation.tsv`.
 
 ## Reference points
 

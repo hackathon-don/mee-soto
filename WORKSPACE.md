@@ -31,8 +31,8 @@ failure, and the selector's own CPU time. Lower is better.
 | `make schedule` | Scheduler only, on the host, over `out/picks.jsonl`, then the sample scorer | `out/schedule-saved.jsonl` |
 | `make schedule SOURCE=ideal` | Scheduler only, over the sample's known failing tests | `out/schedule-ideal.jsonl` |
 | `make test` | Unit tests on the host ([collector test requirements](AGENTS.md#evaluation-and-runtime)) | |
-| `make autoresearch EXPERIMENT=<name>` | One [autoresearch](autoresearch/program.md) iteration: the experiment on the frozen search split, then keep or reset HEAD | `autoresearch/results.tsv` |
-| `make autoresearch-validate EXPERIMENT=<name>` | The experiment on the held-out validation split; for humans, not the loop | `autoresearch/validation.tsv` |
+| `make autoresearch EXPERIMENT=<name>` | One [autoresearch](autoresearch/program.md) iteration: the experiment on all 30 public patches, then keep or reset HEAD | `autoresearch/results.tsv` |
+| `make autoresearch-validate EXPERIMENT=<name>` | The experiment on the held-out validation split (empty until new patches are frozen); for humans, not the loop | `autoresearch/validation.tsv` |
 
 Container stderr is printed to the terminal and saved to `out/e2e.log`,
 `out/e2e-dev.log`, `out/check.log`, or `out/select.log`, respectively.

@@ -191,6 +191,8 @@ def main() -> int:
         problems = check_candidate(kept_row["commit"], args.experiment, ledger)
 
     split = SPLIT_FOR_MODE[args.mode]
+    if not json.loads((HERE / "splits.json").read_text("utf-8"))[split]:
+        fail(f"the {split} split is empty; freeze held-out patches in splits.json first")
     if problems:
         evaluation = {"ok": False, "code": "rejected"}
         status, reason = "reject", "outside the rules: " + "; ".join(problems)
