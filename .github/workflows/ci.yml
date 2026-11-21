@@ -31,7 +31,6 @@ jobs:
           python-version: "3.13"
 
       - name: Run unit tests
-        id: tests
         run: |
           python3 -m pip install -c requirements.lock pytest
           make test
@@ -41,7 +40,6 @@ jobs:
         if: ${{ !cancelled() && steps.python.outcome == 'success' }}
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          TEST_OUTCOME: ${{ steps.tests.outcome }}
         run: |
           status=0
           python3 tools/ci_score.py "$BASE_SHA" | tee -a "$GITHUB_STEP_SUMMARY" || status=$?

@@ -4,7 +4,6 @@ import argparse
 import ast
 from dataclasses import dataclass
 from decimal import Decimal
-import os
 import re
 from statistics import median
 import subprocess
@@ -91,10 +90,8 @@ def print_experiment(experiment: str, runs: list[Score], baseline: Score) -> Non
 
 
 def print_scoring_check(commit: str, passed: bool) -> None:
-    tests = {"success": "passed", "failure": "failed"}.get(os.getenv("TEST_OUTCOME"), "not run")
     print("No new experiments in this change, so there is no score to report.\n")
-    print(f"Scoring check: {'passed' if passed else 'failed'}  ")
-    print(f"Tests: {tests}\n")
+    print(f"Scoring check: {'passed' if passed else 'failed'}\n")
     print("To get a score, add a new experiment name to config.py.\n")
     print(f"Commit hash: {commit}")
 
