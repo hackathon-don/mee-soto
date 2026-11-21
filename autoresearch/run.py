@@ -26,6 +26,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 import score  # noqa: E402
+from tools.ci_score import experiment_names  # noqa: E402
 
 HERE = ROOT / "autoresearch"
 SAMPLE = ROOT / "sample"
@@ -83,6 +84,8 @@ def check_candidate(kept: str, experiment: str, ledger: list[dict]) -> list[str]
     problems = []
     if any(row["experiment"] == experiment for row in ledger):
         problems.append(f"experiment {experiment!r} was already evaluated; name each idea once")
+    if experiment in experiment_names(kept):
+        problems.append(f"experiment {experiment!r} already exists at the kept commit; add a new name")
     for line in git("diff", "--name-status", "--no-renames", kept, "HEAD").splitlines():
         status, path = line.split("\t", 1)
         if status == "A" and path.startswith(NEW_FILE_DIRS):

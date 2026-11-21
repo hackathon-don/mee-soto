@@ -25,8 +25,8 @@ per-person or per-run branches.
 
 1. Check out the `autoresearch` branch.
 2. Seed the kept run with the current best experiment, for example
-   `make autoresearch EXPERIMENT=map`. The first iteration is always recorded
-   as `seed`.
+   `make autoresearch EXPERIMENT=impact`. The first iteration is always
+   recorded as `seed`.
 
 ## One iteration
 
@@ -73,7 +73,12 @@ per-person or per-run branches.
   the selector fixed when testing a scheduler idea.
 - Follow [AGENTS.md](../AGENTS.md): native amd64 builds only, keep the runtime
   sandbox intact, and never submit to the leaderboard.
-- Each experiment name is evaluated once per branch. Rename to retry a variant.
+- Each experiment name is evaluated once per branch, and a candidate's name
+  must not already exist in `config.py` at the kept commit. Rename to retry a
+  variant.
+- Merge main into `autoresearch` only before seeding. A merge during a run
+  touches files outside the editable surface, so the loop rejects it and
+  resets.
 
 ## Benchmark
 
