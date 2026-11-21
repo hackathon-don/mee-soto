@@ -110,7 +110,13 @@ On the 30 public patches with three workers:
 | All tests (default; `make e2e`) | 1,210.470 | 0 |
 | [MapSelector](#run-the-map-selector) ([reference run](https://github.com/hackathon-don/rwx-blast-radius/pull/10)) | 851.9 | 0 |
 
-The local sample scorer does not measure container CPU. `ImpactSelector` has
+`make e2e` and `make e2e-dev` measure the entry process's user and system CPU,
+including reaped descendants, from launch to exit. Build time, host scoring,
+and wall-clock waits are excluded. This local measurement is added only to
+the estimated total; compare strategies using the exact simulated total.
+The leaderboard measures CPU on its own amd64 host, so local estimates are
+only a rough guide. Unreaped background processes are not captured by the
+local process accounting. `ImpactSelector` has
 no judge-compatible reference run in this repository yet.
 
 The official starter files are from the
@@ -131,8 +137,7 @@ drop out, and maps each difference to the tests that can reach it. A cost
 model then splits those candidates into tests to include unrun and tests to
 run. Chosen tests run in forked children against a symlink overlay of the
 patched tree under `/tmp`, and only failures are selected. Running tests uses
-container CPU, which counts toward the board score and which the local scorer
-does not measure.
+container CPU, which counts toward the board score and the local CPU estimate.
 
 `ImpactSelector` starts its wall budget at construction, before loading its
 index. It falls back to every catalog test if index loading or patch analysis

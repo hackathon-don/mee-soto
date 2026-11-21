@@ -11,6 +11,7 @@ import argparse
 import base64
 import json
 import math
+import platform
 import sys
 from pathlib import Path
 from typing import Any
@@ -226,12 +227,30 @@ def _run_report(arguments: list[str]) -> int:
     parser.add_argument("data_dir", type=Path, help="holds tests.json and commits/*.patch")
     parser.add_argument("answers", type=Path, help="answers.json of the sample set")
     parser.add_argument("output_file", type=Path, help="your program's saved stdout")
-    parser.add_argument(
+    cpu_source = parser.add_mutually_exclusive_group()
+    cpu_source.add_argument("--cpu-log", type=Path, help="stderr log from local_cpu.py")
+    cpu_source.add_argument(
         "--cpu-seconds",
         type=float,
         help="CPU time your container used, user and system together, if you measured it",
     )
     options = parser.parse_args(arguments)
+    if options.cpu_log is not None:
+        try:
+            measurements = [
+                float(line.removeprefix("selector_cpu_seconds="))
+                for line in options.cpu_log.read_text("utf-8").splitlines()
+                if line.startswith("selector_cpu_seconds=")
+            ]
+            if len(measurements) != 1:
+                raise ValueError("expected exactly one selector CPU measurement")
+            options.cpu_seconds = measurements[0]
+        except (OSError, ValueError) as error:
+            parser.error(str(error))
+    if options.cpu_seconds is not None and (
+        not math.isfinite(options.cpu_seconds) or options.cpu_seconds < 0
+    ):
+        parser.error("CPU seconds must be finite and nonnegative")
 
     tests = json.loads((options.data_dir / "tests.json").read_text("utf-8"))["tests"]
     answers = json.loads(options.answers.read_text("utf-8"))["commits"]
@@ -263,7 +282,10 @@ def _run_report(arguments: list[str]) -> int:
     simulated_milliseconds = evaluation["simulated_milliseconds"]
     missed_commits = evaluation["missed_commits"]
 
-    print(f"Simulated: {_format_milliseconds(simulated_milliseconds)} s")
+    print(
+        f"simulated total:    {_format_milliseconds(simulated_milliseconds):>12} s"
+        "   (exact, use this to compare strategies)"
+    )
     print(
         f"Misses:    {len(missed_commits)} "
         f"({_format_milliseconds(MISS_PENALTY_MILLISECONDS * len(missed_commits))} s "
@@ -279,8 +301,21 @@ def _run_report(arguments: list[str]) -> int:
         return 0
     cpu_microseconds = round(options.cpu_seconds * MICROSECONDS_PER_SECOND)
     total_microseconds = run_total_microseconds(simulated_milliseconds, cpu_microseconds)
-    print(f"CPU:       {_format_microseconds(cpu_microseconds)} s")
-    print(f"Total:     {_format_microseconds(total_microseconds)} s")
+    print(
+        f"selector CPU (local): {_format_microseconds(cpu_microseconds):>10} s"
+        "   (this machine, varies between runs)"
+    )
+    print(f"estimated total:   {_format_microseconds(total_microseconds):>13} s")
+    print(
+        "The leaderboard measures CPU on its own amd64 host. Compare strategies on the "
+        "simulated total; the estimated total is only a rough guide, not the judge's number."
+    )
+    architecture = platform.machine()
+    if architecture.lower() not in {"amd64", "x86_64"}:
+        print(
+            f"This machine is {architecture}. For a CPU number closer to the judge's, "
+            "run `make e2e-amd64`."
+        )
     return 0
 
 
