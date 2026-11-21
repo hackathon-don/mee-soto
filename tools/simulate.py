@@ -44,10 +44,10 @@ def setup_cost(ctx, tests):
     return sum(int(M.CLASS_SETUP_MS.get(c, 0) * M.CPU_FACTOR) for c in classes)
 
 
-def simulate(ctx, a, truth, stop_after):
+def simulate(ctx, a, truth, stop_after, allow_deferral=True):
     """Plan with the real chooser, then replay the run against ground truth."""
     plan = M.Plan(a.plan.cid)
-    M.choose(plan, a.cand, a.must, a.never, ctx.ms, a.cpu, ctx.ids, a.deferrable)
+    M.choose(plan, a.cand, a.must, a.never, ctx.ms, a.cpu, ctx.ids, a.deferrable if allow_deferral else set())
     run = list(plan.run)  # already cheapest first
     found, spent, rest = set(), 0, []
     for i, n in enumerate(run):
@@ -83,14 +83,10 @@ def main():
         M.DEFER_FAIL_P = float(os.environ["SIM_DEFER_P"])
     for run_scale, fail_ms, order, stop in grid:
         M.RUN_SCALE, M.FAIL_MS = run_scale, fail_ms
-        if order == "nodefer":
-            saved, M.DEFERRABLE_IDS = M.DEFERRABLE_IDS, set()
         sim = cpu = 0.0
         misses = 0
         for cid, a, truth in rows:
-            if order == "nodefer":
-                a.deferrable = set()
-            s, c, m = simulate(ctx, a, truth, stop)
+            s, c, m = simulate(ctx, a, truth, stop, allow_deferral=order != "nodefer")
             sim += s
             cpu += c + PARENT_PER_COMMIT
             misses += m
