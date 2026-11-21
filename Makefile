@@ -19,7 +19,7 @@ RUN_FLAGS := --rm --network none --cpus 2 \
 	--volume $(SAMPLE)/commits:/data/commits:ro \
 	--volume $(SAMPLE)/tests.json:/data/tests.json:ro
 
-.PHONY: build e2e e2e-dev e2e-amd64 check select schedule test
+.PHONY: build e2e e2e-dev e2e-amd64 check select schedule test sample
 
 build:
 	docker build --platform linux/amd64 --tag $(IMAGE) .
@@ -40,6 +40,10 @@ e2e-dev:
 
 # Explicit alias for the judge-compatible amd64 run.
 e2e-amd64: e2e
+
+# Removed target; fails so it cannot be mistaken for a passing run.
+sample:
+	@echo 'make sample was removed; use make e2e' >&2; exit 1
 
 # The output's rules only: every line well formed and every commit answered.
 # A wrong selection still passes here; make e2e counts the misses.
