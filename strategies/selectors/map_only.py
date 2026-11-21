@@ -1,27 +1,20 @@
-"""Opt-in file-to-test selector backed by a precomputed coverage map."""
+"""Opt-in lookup-only selector backed by a build-generated file map."""
 
 from __future__ import annotations
 
 import gzip
-import hashlib
 import json
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from . import CatalogTest, Patch
+from .map_format import SCHEMA_VERSION, SOURCE, catalog_records, catalog_sha256, valid_relative_path
 
 if TYPE_CHECKING:
     from config import Config
 
-MAP_SCHEMA = 1
-DONOR_REPOSITORY = "hackathon-don/rwx-blast-radius"
-DONOR_COMMIT = "d8e4a935eb4261fa6dd32080b0614afbb3fc8b45"
-DONOR_INDEX_PATH = "maps/index.pkl.gz"
-DONOR_INDEX_SHA256 = "9bb245fa41d26ddfbb5866d0791c969033d130ea93272d3742fe7491f3188107"
-SQLGLOT_COMMIT = "eb11aec4be8cb2122afe713a4816662c3f0fb2fa"
-DONOR_CATALOG_SHA256 = "f3bdf0f41f64d10ff0d9edfa93b4c9bd0c296a8e770678d0a40d372c9882fc34"
 MAP_PATH = Path(__file__).with_name("file_map.json.gz")
 
 _HEADER = re.compile(r"diff --git a/([^ \t\"\\]+) b/([^ \t\"\\]+)\Z")
@@ -29,36 +22,13 @@ _HUNK = re.compile(r"@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@.*\Z")
 _INVALID = object()
 
 
-def catalog_records(catalog: Sequence[CatalogTest]) -> list[dict[str, Any]]:
-    records = []
-    for test in catalog:
-        number, test_id, path = test["number"], test["id"], test["file"]
-        if type(number) is not int or not isinstance(test_id, str) or not isinstance(path, str):
-            raise ValueError("invalid catalog identity")
-        records.append({"number": number, "id": test_id, "file": path})
-    records.sort(key=lambda record: record["number"])
-    if len({record["number"] for record in records}) != len(records):
-        raise ValueError("duplicate catalog number")
-    return records
-
-
-def catalog_sha256(records: Sequence[Mapping[str, Any]]) -> str:
-    identity = [[record["number"], record["id"], record["file"]] for record in records]
-    encoded = json.dumps(identity, separators=(",", ":")).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
-
-
-def _valid_path(path: str) -> bool:
-    return bool(path) and not path.startswith("/") and "\\" not in path and "\x00" not in path and all(
-        part not in ("", ".", "..") for part in path.split("/")
-    )
-
-
 def _catalog_numbers(catalog: Sequence[CatalogTest]) -> list[int]:
     return [record["number"] for record in catalog_records(catalog)]
 
 
-def _read_map(catalog: Sequence[CatalogTest]) -> tuple[dict[str, list[int]], set[int]] | None:
+def _read_map(
+    catalog: Sequence[CatalogTest],
+) -> tuple[dict[str, list[int]], dict[str, list[int]], set[int]] | None:
     try:
         with gzip.open(MAP_PATH, "rt", encoding="utf-8") as stream:
             data = json.load(stream)
@@ -66,50 +36,62 @@ def _read_map(catalog: Sequence[CatalogTest]) -> tuple[dict[str, list[int]], set
     except (OSError, EOFError, UnicodeError, ValueError, TypeError, KeyError):
         return None
 
-    if not isinstance(data, dict) or data.get("schema") != MAP_SCHEMA:
+    if not isinstance(data, dict) or data.get("schema") != SCHEMA_VERSION:
         return None
-    if records != data.get("catalog") or catalog_sha256(records) != DONOR_CATALOG_SHA256:
+    if records != data.get("catalog"):
         return None
-    if data.get("catalog_sha256") != DONOR_CATALOG_SHA256:
-        return None
-
-    source = data.get("source")
-    expected_source = {
-        "repository": DONOR_REPOSITORY,
-        "commit": DONOR_COMMIT,
-        "index_path": DONOR_INDEX_PATH,
-        "index_sha256": DONOR_INDEX_SHA256,
-        "sqlglot_commit": SQLGLOT_COMMIT,
-        "catalog_sha256": DONOR_CATALOG_SHA256,
-    }
-    if source != expected_source:
+    digest = catalog_sha256(records)
+    if data.get("catalog_sha256") != digest or data.get("source") != SOURCE:
         return None
 
     valid_numbers = {record["number"] for record in records}
-    always: set[int] = set()
-    for key in ("baseline_fail", "missing"):
-        values = data.get(key)
+    results = data.get("results")
+    if not isinstance(results, dict):
+        return None
+    statuses: dict[str, set[int]] = {}
+    for key in ("passed", "baseline_fail", "missing", "incomplete"):
+        values = results.get(key)
         if not isinstance(values, list):
             return None
         if any(type(number) is not int or number not in valid_numbers for number in values):
             return None
         if len(set(values)) != len(values):
             return None
-        always.update(values)
+        statuses[key] = set(values)
+    union: set[int] = set()
+    for values in statuses.values():
+        if union.intersection(values):
+            return None
+        union.update(values)
+    if union != valid_numbers:
+        return None
+    counts = {
+        "catalog": len(records),
+        **{key: len(values) for key, values in statuses.items()},
+    }
+    if data.get("counts") != counts:
+        return None
 
     files = data.get("files")
-    if not isinstance(files, dict):
+    directories = data.get("directories")
+    if not isinstance(files, dict) or not isinstance(directories, dict):
         return None
-    for path, values in files.items():
-        if not isinstance(path, str) or not _valid_path(path):
-            return None
-        if not isinstance(values, list):
-            return None
-        if any(type(number) is not int or number not in valid_numbers for number in values):
-            return None
-        if len(set(values)) != len(values):
-            return None
-    return files, always
+    for paths, allow_root in ((files, False), (directories, True)):
+        for path, values in paths.items():
+            if (
+                not isinstance(path, str)
+                or not valid_relative_path(path, allow_root=allow_root)
+                or not isinstance(values, list)
+            ):
+                return None
+            if any(type(number) is not int or number not in valid_numbers for number in values):
+                return None
+            if len(set(values)) != len(values):
+                return None
+            if not set(values).issubset(statuses["passed"]):
+                return None
+    always = statuses["baseline_fail"] | statuses["missing"] | statuses["incomplete"]
+    return files, directories, always
 
 
 def _file_marker(value: str, prefix: str) -> str | None | object:
@@ -119,11 +101,11 @@ def _file_marker(value: str, prefix: str) -> str | None | object:
     if not value.startswith(expected):
         return _INVALID
     path = value[len(expected) :]
-    return path if _valid_path(path) else _INVALID
+    return path if valid_relative_path(path) else _INVALID
 
 
 def _metadata_path(value: str) -> str | object:
-    if not _valid_path(value):
+    if not valid_relative_path(value):
         return _INVALID
     return value
 
@@ -133,7 +115,7 @@ def _validate_block(lines: list[str]) -> tuple[str, str] | None:
     if not match:
         return None
     old_path, new_path = match.groups()
-    if not _valid_path(old_path) or not _valid_path(new_path):
+    if not valid_relative_path(old_path) or not valid_relative_path(new_path):
         return None
 
     old_marker: str | None | object = _INVALID
@@ -288,13 +270,16 @@ class MapSelector:
             loaded = _read_map(catalog)
         except Exception:  # noqa: BLE001 - invalid maps fail closed to all tests
             loaded = None
-        self.files, self.always = loaded if loaded is not None else (None, set())
+        if loaded is None:
+            self.files, self.directories, self.always = None, None, set()
+        else:
+            self.files, self.directories, self.always = loaded
 
     def select(self, commits: Sequence[Patch]) -> dict[str, list[int]]:
         selections: dict[str, list[int]] = {}
         for patch in commits:
             selected = self.numbers
-            if self.files is not None:
+            if self.files is not None and self.directories is not None:
                 paths = changed_paths(patch.diff)
                 if paths:
                     candidates = set(self.always)
@@ -304,6 +289,8 @@ class MapSelector:
                             candidates = set(self.numbers)
                             break
                         candidates.update(mapped)
+                        parent = path.rpartition("/")[0] or "."
+                        candidates.update(self.directories.get(parent, []))
                     selected = [number for number in self.numbers if number in candidates]
             selections[patch.commit] = list(selected)
         return selections
