@@ -245,3 +245,8 @@ seconds, and the commit subject.
     identified tests with passed setup, body, and teardown. Keep skipped and
     unsupported members and retain the whole cohort on a failure, unexpected
     report, timeout, or insufficient schedule improvement.
+
+18. **Use completed baseline traces to choose verification cohorts.** Exclude
+    tests without a completed measured build trace from the optional cohort
+    search. They stay selected. Reprice the eligible cohorts and require the
+    same full patched-test pass evidence before dropping any member.
