@@ -290,6 +290,8 @@ class Analyzer:
 
     def _analyze_file(self, fp: FilePatch, imp: Impact) -> None:
         path = fp.path
+        if fp.old_path and fp.new_path and fp.old_path != fp.new_path:
+            imp.candidates |= self.ix.importers(fp.old_path)
         old = self.read_old(fp.old_path) if fp.old_path else None
         if fp.old_path and old is None:
             # Unknown or binary file: anything that read it is a candidate.
