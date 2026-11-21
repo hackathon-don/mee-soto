@@ -4,7 +4,7 @@
     python3 autoresearch/run.py loop --experiment NAME      # search split; keeps or reverts HEAD
     python3 autoresearch/run.py validate --experiment NAME  # validation split; humans only
 
-The loop runs on an `autoresearch/<tag>` branch. Each iteration evaluates the
+The loop runs on an `autoresearch-<tag>` branch. Each iteration evaluates the
 experiment named at HEAD on the search split and compares it with the last
 kept run in `autoresearch/results.tsv`. HEAD is kept only when its simulated
 total is lower and it misses no commit the kept run caught; otherwise the
@@ -37,7 +37,7 @@ FIELDS = [
     "time", "branch", "commit", "experiment", "split", "status",
     "simulated_s", "misses", "missed", "selector_cpu_s", "description",
 ]
-BRANCH_PREFIX = "autoresearch/"
+BRANCH_PREFIX = "autoresearch-"
 
 # What a candidate commit may change relative to the last kept commit.
 NEW_FILE_DIRS = ("strategies/", "tools/")

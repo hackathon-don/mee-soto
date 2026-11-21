@@ -13,9 +13,9 @@ and logged next to it but is not part of the keep decision.
 
 ## Setup (once per research run)
 
-1. Start from the PR branch that added this directory, or from main once it
-   has it. Create a run branch: `git checkout -b autoresearch/<tag>`, where
-   `<tag>` names the run, such as `autoresearch/nov22`.
+1. Start from the `autoresearch` branch, which holds this directory. Create a
+   run branch: `git checkout -b autoresearch-<tag>`, where
+   `<tag>` names the run, such as `autoresearch-nov22`.
 2. Seed the kept run with the current best experiment, for example
    `make autoresearch EXPERIMENT=map`. The first iteration on a branch is
    always recorded as `seed`.
@@ -88,9 +88,9 @@ These are full-sample numbers from earlier research, not search-split scores.
 
 ## Idea queue
 
-From Andrew's research notes (first-principles research plus a paper search), in the
-recommended order. Take the first idea that has not been tried on this branch.
-Andrew adds or reorders ideas here.
+Ideas 1 to 7 come from Andrew's first research notes, in their recommended
+order; 8 to 11 and the safety harness come from his second notes. Take the
+first idea not yet tried on this branch. Andrew adds or reorders ideas here.
 
 1. **Worker sweep (scheduler idea, selector fixed).** A new scheduler that
    runs integer-ms LPT for every worker count `k = 1..8` and picks the lowest
@@ -136,7 +136,54 @@ Andrew adds or reorders ideas here.
    and historical patches (see Benchmark) and require zero misses on it
    before an idea is promoted.
 
-Ideas 2 to 6 add selector CPU. It is logged separately and not part of the
+8. **SQL-input feature inventory.** At build time, record what each test's
+   SQL inputs exercise: read and write dialect, parsed node types such as
+   `exp.Coalesce`, function names, identifiers, and tokenizer or parser error
+   categories (keep raw tokens for malformed inputs). A patch to a parser,
+   generator, optimizer or dialect rule then includes the tests whose inputs
+   use that feature. Use it only to include tests: a missing record is not
+   evidence that a test is safe.
+9. **Dense integer bitsets.** Store each test set as a Python `int` over the
+   1,620 catalog numbers and combine sets with `|`. This changes no
+   selection, only selector CPU. Try it once a selector has real indexes, and
+   measure the whole selector including conversion back to test numbers.
+10. **Reuse pure analysis across the batch.** Every patch targets the same
+    pinned base, so load indexes and parse baseline sources once per run.
+    Reuse a result only on an exact match of patched content and config, never
+    carry one patch's source tree into the next, and never ship a
+    patch-to-tests table.
+11. **Assertion-aware checked dependencies (exploratory, last).** A build-time
+    dynamic slice from each test's assertions separates "reached this code"
+    from "checked a value this code produced". Absence from the slice must not
+    drop a test on its own: new branches, exceptions before the assertion and
+    module-level effects are not in a baseline slice. Expensive to build.
+
+### Safety harness
+
+These are not loop experiments: they produce evidence about an index or a
+selector. Put them under `tools/` and run them by hand, outside
+`make autoresearch`.
+
+- **Cold, warm and reordered profiling audit.** Build the dynamic index in a
+  fresh process, in reversed and shuffled test orders, and in a warm process,
+  then compare each test's recorded dependencies. A difference points to lazy
+  imports, caches or global registrations the index misses.
+- **Multi-edit interaction checks.** On clean copies of the pinned tree,
+  compare failing tests for edit A, edit B and A+B. When A+B fails a test
+  outside the union selected for A and B, add a general rule or fallback.
+  Public patch `rszg` (three files) is a starting case.
+- **Delta-debug a missed selection.** When a candidate misses a failing test
+  on a public patch, shrink the patch until it is 1-minimal while it still
+  applies, the same test fails the same way, and the selector still omits it.
+  The small case shows which general rule is missing.
+- **Selector metamorphic checks.** Encodings of the same change (reordered
+  file blocks or hunks, extra context lines) must give the same selected
+  set once their applied trees are verified identical, and so must batch
+  order and cold versus warm caches. Never assume comment or whitespace edits
+  are harmless, or that selection is monotone across combined patches.
+
+Ideas 2 to 6, 8, 10 and 11 add selector CPU. It is logged separately and not
+part of the
 keep decision, so note it in the description when it grows.
 
 ## Run log
