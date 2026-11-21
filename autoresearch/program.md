@@ -335,3 +335,17 @@ seconds, and the commit subject.
     dynamic reflection, subprocess paths, and unobserved uses. The absence
     of an observed affected key is useful only with explicit observer
     completeness and stable composition.
+
+33. **Separate native parent reports from subtest reports.** Audit the exact
+    stock pytest collection and ordered setup, call, and teardown reports
+    before trying to recover an apparent verifier failure. Check subtest
+    reports independently under the pinned pytest version and require clean
+    session termination. A parent call can pass while a subtest genuinely
+    fails. Retain failed, missing, skipped, or unknown observations.
+
+34. **Price changes against the observed required-test floor.** Before
+    spending time on another verifier or fixed-worker scheduler, use
+    confirmed failures and explicitly preserved cases to bound attainable
+    simulated savings under the same worker policy. Use the larger of the
+    longest retained case and mean retained workload, plus the unchanged
+    per-worker charge. The bound cannot authorize removal on its own.
