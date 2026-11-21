@@ -62,8 +62,11 @@ jobs:
         id: score
         if: ${{ !cancelled() && steps.python.outcome == 'success' }}
         env:
-          BASE_SHA: ${{ steps.force-base.outputs.sha || github.event.pull_request.base.sha || github.event.before }}
+          BASE_SHA: ${{ steps.force-base.outputs.sha || github.event.before }}
         run: |
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            BASE_SHA=$(git rev-parse HEAD^1)
+          fi
           status=0
           python3 tools/ci_score.py "$BASE_SHA" | tee -a "$GITHUB_STEP_SUMMARY" || status=$?
           {
