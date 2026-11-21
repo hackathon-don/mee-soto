@@ -20,9 +20,23 @@ failure, and the selector's own CPU time. Lower is better.
    count in each pull request. Use `make check` for output validation, not
    as a substitute for checking the miss count.
 
+## Selection and scheduling interface
+
+- `selector.select(diff, catalog)` takes unified diff text and the entries
+  from `tests.json`. It returns the test numbers to run, currently the entire
+  catalog. Selection changes belong here.
+- `scheduler.schedule(selected, durations)` takes the selected test numbers
+  and a mapping from test number to recorded seconds. It returns worker lists
+  containing each selected number exactly once, or `[]` for no tests.
+  Scheduling changes belong here.
+- The container entrypoint selects and schedules tests for each patch, then writes one
+  `{"commit": "...", "workers": [...]}` JSON line. Keep selection fixed when
+  measuring scheduling changes and scheduling fixed when measuring selection.
+
 ## Reference result
 
-The unchanged official starter runs all 1,620 tests on three workers.
+The interface split preserves the official starter's behavior: run
+all 1,620 tests on three workers.
 On the 30 public patches, `make sample` reports **1,210.470 simulated
 seconds, zero misses**. The local sample scorer does not measure container
 CPU; do not compare this score directly with the published leaderboard
