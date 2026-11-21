@@ -17,6 +17,10 @@ the upstream SQLGlot checkout do not apply here.
 
 ## Task routing
 
+Try a new idea as a new selector or scheduler class in its own file, passed to
+`Config`. Do not edit an existing strategy or `DEFAULT_CONFIG` to run a trial;
+see [Try a new strategy](WORKSPACE.md#try-a-new-strategy).
+
 ### Selection
 
 - Start in [strategies/selectors/](strategies/selectors/) and [config.py](config.py).

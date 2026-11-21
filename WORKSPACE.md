@@ -63,6 +63,40 @@ the known failing tests. The same modes run directly as
   patch, caching identical consecutive selections, and writes one
   `{"commit": "...", "workers": [...]}` JSON line.
 
+## Try a new strategy
+
+Each idea is a new class, not an edit to an existing one, so `main` keeps
+running the default and every idea can be compared against it.
+
+1. Add the class in its own file, such as
+   `strategies/schedulers/my_scheduler.py`, following the
+   [interface](#selection-and-scheduling-interface).
+2. Run it by passing the class to `Config`. No command-line flag or `make`
+   variable switches strategies: `main.py` and every `make` target run
+   `DEFAULT_CONFIG`, so call `main` from `python3 -c` instead.
+3. Change `DEFAULT_CONFIG` in `config.py` only in the PR that makes the
+   new class the submission, with the comparison as evidence.
+
+To compare schedulers, select once and replay the same picks on the host,
+which needs no image rebuild:
+
+```sh
+make select                # once; writes out/picks.jsonl
+make schedule              # baseline LptScheduler on those picks
+python3 -c 'import sys; from config import Config; from main import main; from strategies.schedulers.my_scheduler import MyScheduler; main(Config(scheduler_cls=MyScheduler), sys.argv[1:])' \
+  --data sample schedule --picks out/picks.jsonl > out/schedule-my.jsonl &&
+python3 score.py sample sample/answers.json out/schedule-my.jsonl
+```
+
+Use `--ideal sample/answers.json` in place of `--picks out/picks.jsonl` to
+compare on the known failing tests.
+
+To compare selectors, run `make e2e` for the baseline, then the
+[map selector recipe](#run-the-map-selector) with its `python -c` line
+naming your class, for example
+`main(Config(selector_cls=MySelector))`. Selectors run in the image, so
+rebuild after each change.
+
 ## Reference results
 
 On the 30 public patches with three workers:
