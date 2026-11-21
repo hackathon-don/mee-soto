@@ -2,5 +2,6 @@
 # digest is the image we labeled every commit in: its Python and SQLite
 # decide which sqlglot tests run, so keep it if your image runs them.
 FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
-COPY main.py selector.py scheduler.py /app/
+COPY main.py config.py /app/
+COPY strategies/ /app/strategies/
 CMD ["python", "/app/main.py"]

@@ -22,15 +22,21 @@ failure, and the selector's own CPU time. Lower is better.
 
 ## Selection and scheduling interface
 
-- `selector.select(diff, catalog)` takes unified diff text and the entries
-  from `tests.json`. It returns a list of unique test numbers from the catalog,
-  currently all of them. Selection changes belong here.
-- `scheduler.schedule(selected, durations)` takes the selected test numbers
-  and a mapping from test number to recorded seconds. It returns worker lists
-  containing each selected number exactly once, or `[]` for no tests.
-  Scheduling changes belong here.
+- `config.py` defines the frozen experiment `Config`: selector and scheduler
+  classes, worker count (default 3), and data directory (default `/data`).
+  `DEFAULT_CONFIG` uses `AllTestsSelector` and `LptScheduler`.
+- `strategies/selectors/` defines `Selector`, `CatalogTest`, and the `Patch`
+  record (commit id and diff text). A selector is constructed once with
+  `(catalog, config)`. Its `select(commits)` method processes the batch and
+  returns a mapping from commit id to unique catalog test numbers.
+  `AllTestsSelector` currently selects every test for every commit.
+- `strategies/schedulers/` defines `Scheduler`, constructed once with
+  `(durations, config)`. Its `schedule(selected)` method returns worker lists
+  containing each selected number exactly once, or `[]` for no tests, dropping
+  empty workers. `LptScheduler` uses at most `config.workers` workers.
 - The container entrypoint, `main.py`, selects and schedules tests for each
-  patch and writes one `{"commit": "...", "workers": [...]}` JSON line. Keep selection
+  patch, caching identical consecutive selections, and writes one
+  `{"commit": "...", "workers": [...]}` JSON line. Keep selection
   fixed when measuring scheduling changes and vice versa.
 
 ## Reference result
