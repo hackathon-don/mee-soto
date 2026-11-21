@@ -322,3 +322,9 @@ seconds, and the commit subject.
     Compare both fully linked and serialized compiler paths and all exact
     DuckDB statements. Limit executable statements to the pinned read-only,
     deterministic fixture operations and retain the test on any uncertainty.
+
+31. **Measure executor dependency-order and shared-state obligations.**
+    Trace the pinned literal-input test's complete lifecycle and actual
+    nested Plans. A future proof may allow disjoint ready branches and
+    order-insensitive merges. Keep any case with mutable shared state,
+    unproved merge order, or incomplete subquery observations.
