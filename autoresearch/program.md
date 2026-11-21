@@ -11,6 +11,13 @@ Lower the simulated total on the search split with zero added misses. The
 simulated total is what `score.py` reports as exact. Selector CPU is printed
 and logged next to it but is not part of the keep decision.
 
+## One driver
+
+Only one person or agent runs the loop at a time: the driver. Everyone else
+adds ideas to the queue below, by committing to `program.md` on the
+`autoresearch` branch, and does not run `make autoresearch`. The driver never
+edits this file.
+
 ## Setup (once per research run)
 
 1. Start from the `autoresearch` branch, which holds this directory. Create a
@@ -22,7 +29,9 @@ and logged next to it but is not part of the keep decision.
 
 ## One iteration
 
-1. Pick the next idea from the queue below.
+1. Pick the next idea from the queue on the `autoresearch` branch
+   (`git show autoresearch:autoresearch/program.md`). Ideas added after the
+   run branch was created are there, not in the run branch's copy.
 2. Implement it as a new strategy class in its own file under
    `strategies/selectors/` or `strategies/schedulers/`, plus a new
    `EXPERIMENTS` entry in `config.py` named for the idea. Optional build-time
@@ -90,7 +99,8 @@ These are full-sample numbers from earlier research, not search-split scores.
 
 Ideas 1 to 7 come from Andrew's first research notes, in their recommended
 order; 8 to 11 and the safety harness come from his second notes. Take the
-first idea not yet tried on this branch. Andrew adds or reorders ideas here.
+first idea not yet tried on the run branch. Anyone but the driver adds or
+reorders ideas here; Andrew has the final say on order.
 
 1. **Worker sweep (scheduler idea, selector fixed).** A new scheduler that
    runs integer-ms LPT for every worker count `k = 1..8` and picks the lowest

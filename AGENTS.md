@@ -23,6 +23,9 @@ New idea = new class in its own file + new `EXPERIMENTS` entry; don't edit exist
 
 - When asked to run the autoresearch loop, follow
   [autoresearch/program.md](autoresearch/program.md) and do not edit it.
+- Only one driver runs the loop at a time. Otherwise, add ideas to the queue
+  in `autoresearch/program.md` on the `autoresearch` branch instead of
+  running it.
 
 ### Selection
 
