@@ -96,7 +96,7 @@ def main():
             misses += m
             if m:
                 print("MISS", cid, file=sys.stderr)
-        results.append(((sim + cpu) / 1000, sim / 1000, cpu / 1000, misses, run_scale, fail_ms, order, stop))
+        results.append(((sim + cpu + misses * 300_000) / 1000, sim / 1000, cpu / 1000, misses, run_scale, fail_ms, order, stop))
     results.sort()
     for r in results[:12]:
         print("total=%.1f sim=%.1f cpu=%.1f misses=%d scale=%s fail=%s order=%s stop=%s" % r)
