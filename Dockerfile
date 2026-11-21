@@ -1,6 +1,7 @@
 # Generate the selector map from the pinned test source. Keep this stage
 # independent from runtime files so runtime edits reuse the completed map.
-FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 AS map-builder
+ARG BASE=python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
+FROM ${BASE} AS map-builder
 WORKDIR /build
 COPY requirements.lock /tmp/requirements.lock
 RUN python -m pip install --no-cache-dir -r /tmp/requirements.lock
@@ -19,7 +20,7 @@ RUN python /build/tools/build_file_map.py \
 
 # The scorer runs linux/amd64 without network, with a read-only root and
 # unprivileged user. Keep this runtime stage small and free of test tooling.
-FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 AS runtime
+FROM ${BASE} AS runtime
 COPY main.py config.py /app/
 COPY strategies/ /app/strategies/
 COPY --from=map-builder /out/file_map.json.gz /app/strategies/selectors/file_map.json.gz

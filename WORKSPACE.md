@@ -12,7 +12,8 @@ failure, and the selector's own CPU time. Lower is better.
    same environment for both teammates. Docker must be running and accessible
    to your user; the host also needs GNU Make and Python 3.9 or newer.
    A local machine with those tools works too: the Makefile targets
-   `linux/amd64` explicitly, even on an ARM host.
+   `linux/amd64` explicitly for judge-compatible runs, even on an ARM host.
+   Use `make e2e-dev` for a faster native-architecture local loop instead.
 2. Clone the repository into a path without spaces. In the repo root, run
    `docker version` (check for both Client and Server), `make --version`,
    and `python3 --version`, then run `make e2e`.
@@ -25,11 +26,15 @@ failure, and the selector's own CPU time. Lower is better.
 | Command | Runs | Output |
 | --- | --- | --- |
 | `make e2e` (alias `make sample`) | Selector and scheduler in the image, under the scorer's limits, then the sample scorer | `out/e2e.jsonl` |
+| `make e2e-dev` | Same limits and scorer, native architecture with a separate `blast-radius-entry-dev` image and unpinned Python base | `out/e2e-dev.jsonl` |
 | `make check` | Same run, format check only | `out/e2e.jsonl` |
 | `make select` | Selector only, in the image | `out/picks.jsonl`, one `{"commit", "selected"}` line a patch |
 | `make schedule` | Scheduler only, on the host, over `out/picks.jsonl`, then the sample scorer | `out/schedule-saved.jsonl` |
 | `make schedule SOURCE=ideal` | Scheduler only, over the sample's known failing tests | `out/schedule-ideal.jsonl` |
 | `make test` | Unit tests, on the host | |
+
+Container stderr is printed to the terminal and saved to `out/e2e.log`,
+`out/e2e-dev.log`, `out/check.log`, or `out/select.log`, respectively.
 
 Run `make select` once, then `make schedule` after each scheduler change: the
 selection stays fixed, so score differences come from scheduling alone.
