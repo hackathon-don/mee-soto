@@ -60,6 +60,11 @@ the known failing tests. The same modes run directly as
   precomputed file-to-test map only; it does not import the patched source,
   collect tests, launch subprocesses, or probe imports. Unknown, empty,
   malformed, quoted, binary, or unsupported changes select all tests.
+- `ImpactSelector` is opt-in via `Config(selector_cls=ImpactSelector)` (import
+  it from `strategies.selectors.impact`). It maps an AST diff of each patch
+  onto committed line-coverage maps, then runs cheap candidates against the
+  patched tree and selects the ones that fail. See
+  [Impact selector](#impact-selector).
 - `strategies/schedulers/` defines `Scheduler`, constructed once with
   `(durations, config)`. Its `schedule(selected)` method returns worker lists
   containing each selected number exactly once, or `[]` for no tests, dropping
@@ -105,10 +110,48 @@ On the 30 public patches with three workers:
 | All tests (default; `make e2e`) | 1,210.470 | 0 |
 | [MapSelector](#run-the-map-selector) ([reference run](https://github.com/hackathon-don/rwx-blast-radius/pull/10)) | 851.9 | 0 |
 
-The local sample scorer does not measure container CPU.
+The local sample scorer does not measure container CPU. `ImpactSelector` has
+no judge-compatible reference run in this repository yet.
 
 The official starter files are from the
 [track download](https://www.joinbuilders.org/buildathon/tracks/blast-radius/files/blast-radius-sample.tar.gz).
+
+## Impact selector
+
+`strategies/selectors/impact/` holds `ImpactSelector`. The maps committed
+under its `maps/` directory were built offline from the pinned SQLGlot
+revision: per-line test coverage, class instantiations, fixture reads, and
+measured per-test CPU. The image installs `requirements.lock`, fetches that
+revision into `/opt/sg`, builds `maps/static.pkl.gz` (a name index), and
+precompiles Python modules. The offline map and tuning tools live in `tools/`
+and stay out of the Docker build context.
+
+For each patch the selector diffs the old and new ASTs, so comment-only edits
+drop out, and maps each difference to the tests that can reach it. A cost
+model then splits those candidates into tests to include unrun and tests to
+run. Chosen tests run in forked children against a symlink overlay of the
+patched tree under `/tmp`, and only failures are selected. Running tests uses
+container CPU, which counts toward the board score and which the local scorer
+does not measure.
+
+`ImpactSelector` starts its wall budget at construction, before loading its
+index. It falls back to every catalog test if index loading or patch analysis
+raises an error. Its tuning knobs are environment variables (`BR_SG`,
+`BR_MAPS`, `BR_WORK`, `BR_WALL_BUDGET`, and the other `BR_*` settings) read in
+`selector.py`, not `Config` fields.
+
+The selector's internal `pack.py` estimates costs when deciding what to run;
+it does not replace the final `LptScheduler`, which uses `config.workers`.
+Verification also probes changed Python imports in its child process, with a
+2-second bound per import. An exception, timeout, or missing child result
+keeps that module's importers selected; only a successful probe clears them.
+Pure Git renames are recognized from `rename from`/`rename to` metadata, and
+old-path importers stay candidates even when the probe succeeds. Public sample
+results do not guarantee zero misses on hidden patches.
+
+To run it, use the [MapSelector recipe](#run-the-map-selector) with
+`from strategies.selectors.impact import ImpactSelector` and
+`Config(selector_cls=ImpactSelector)` in the `python -c` argument.
 
 ## Map-only selector
 
@@ -124,9 +167,10 @@ The deterministic gzip JSON uses schema 2 and embeds the exact
 `(number, id, file)` catalog identity and its digest. It is generated in the
 builder stage and is not committed. The builder copies the pinned
 `requirements.lock`, collector, schema helper, and `sample/tests.json`; it
-does not receive sample patches or answers. The final stage copies only the
-generated map and runtime application files, not pytest, test source, or
-collector tooling. Runtime validates schema, source pin, catalog identity,
+does not receive sample patches or answers. The final stage copies the
+generated map and runtime application files, not the collector tooling; it
+keeps the pinned dependencies and SQLGlot source for `ImpactSelector`, which
+`MapSelector` does not read. Runtime validates schema, source pin, catalog identity,
 status partition, paths, and test numbers; malformed or missing maps fall back
 to all tests.
 
