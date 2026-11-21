@@ -48,6 +48,10 @@ modes run directly as `python3 main.py [--data DIR] [select | schedule
   `(catalog, config)`. Its `select(commits)` method processes the batch and
   returns a mapping from commit id to unique catalog test numbers.
   `AllTestsSelector` currently selects every test for every commit.
+- `MapSelector` is opt-in via `Config(selector_cls=MapSelector)`. It reads a
+  precomputed file-to-test map only; it does not import the patched source,
+  collect tests, launch subprocesses, or probe imports. Unknown, empty,
+  malformed, quoted, binary, or unsupported changes select all tests.
 - `strategies/schedulers/` defines `Scheduler`, constructed once with
   `(durations, config)`. Its `schedule(selected)` method returns worker lists
   containing each selected number exactly once, or `[]` for no tests, dropping
@@ -74,3 +78,49 @@ no network at runtime, a read-only filesystem, and the unprivileged
 
 The official starter files are from the
 [track download](https://www.joinbuilders.org/buildathon/tracks/blast-radius/files/blast-radius-sample.tar.gz).
+
+## Map-only selector
+
+`MapSelector` is opt-in; `Config()` still selects all tests. The Docker
+builder runs `tools/build_file_map.py` against SQLGlot
+`tobymao/sqlglot@eb11aec4be8cb2122afe713a4816662c3f0fb2fa` and
+`sample/tests.json`. It starts one Python 3.13 child per catalog test, enables
+`sys.monitoring.PY_START` before importing pytest, and audits file opens and
+directory enumeration. The map records repository-relative source/fixture
+files and directory dependencies; runtime adds dependents of only the
+immediate parent directory of each changed file.
+
+The deterministic gzip JSON uses schema 2 and embeds the exact
+`(number, id, file)` catalog identity and its digest. It is generated in the
+builder stage and is not committed. The builder copies the pinned
+`requirements.lock`, collector, schema helper, and `sample/tests.json`; it
+does not receive sample patches or answers. The final stage copies only the
+generated map and runtime application files, not pytest, test source, or
+collector tooling. Runtime validates schema, source pin, catalog identity,
+status partition, paths, and test numbers; malformed or missing maps fall back
+to all tests.
+
+Baseline failures, missing tests, and incomplete traces are always selected.
+Incomplete includes subprocess/fork use (descendants are not traced),
+timeouts, invalid results, and tests whose trace omitted their catalog file.
+Tests not started before the collector budget expires are recorded as missing,
+not silently discarded. At runtime, changed files must have exact file entries;
+an unmapped/new path, empty entry, or unsupported diff falls back to all tests.
+For directory reads, only tests that enumerated the changed file's immediate
+parent directory are added; a file-content edit does not affect ancestor
+directory listings. As with any pinned test-to-file map, changed control flow
+or hidden tests may not be represented by this catalog's measurements.
+
+The collector uses four workers, a 360-second test-collection budget, and a
+90-second per-test timeout by default. The collection budget does not include
+base-image acquisition, SQLGlot source download, dependency installation, or
+final image assembly; those steps add to a clean Docker build's total time.
+Build logs report the full catalog partition (passed, baseline failures,
+incomplete, and missing); missing/incomplete tests are always selected. The
+final image has no tests or answers mounted at runtime.
+
+Opt in explicitly; `DEFAULT_CONFIG` remains all-tests:
+
+```sh
+python3 -c 'from config import Config; from main import main; from strategies.selectors.map_only import MapSelector; main(Config(selector_cls=MapSelector))'
+```
