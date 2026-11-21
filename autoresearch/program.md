@@ -315,3 +315,10 @@ seconds, and the commit subject.
     Compare fixture metadata and actual captured call arguments to find
     where the cheaper replay becomes incomplete. Record no pass/fail or
     expected-output data. Require a complete input/state trace first.
+
+30. **Verify the complete full-optimizer transcript with source-derived inputs.**
+    Admit the same audited fresh-copy edit. Reconstruct every exact worker
+    invocation from the pinned literal test schema and fixture metadata.
+    Compare both fully linked and serialized compiler paths and all exact
+    DuckDB statements. Limit executable statements to the pinned read-only,
+    deterministic fixture operations and retain the test on any uncertainty.
