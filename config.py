@@ -7,6 +7,7 @@ from strategies.schedulers import Scheduler
 from strategies.schedulers.lpt import LptScheduler
 from strategies.selectors import Selector
 from strategies.selectors.all_tests import AllTestsSelector
+from strategies.selectors.map_narrow import NarrowMapSelector
 from strategies.selectors.map_only import MapSelector
 
 MAX_WORKERS = 8
@@ -27,6 +28,7 @@ class Config:
 EXPERIMENTS: dict[str, Config] = {
     "baseline": Config(),
     "map": Config(selector_cls=MapSelector),
+    "map-narrow": Config(selector_cls=NarrowMapSelector),
 }
 
 DEFAULT_CONFIG = EXPERIMENTS["baseline"]
