@@ -88,16 +88,56 @@ These are full-sample numbers from earlier research, not search-split scores.
 
 ## Idea queue
 
-Ideas from the earlier research plan. Andrew adds the rest here, one bullet
-per idea, in priority order.
+From Andrew's research notes (first-principles research plus a paper search), in the
+recommended order. Take the first idea that has not been tried on this branch.
+Andrew adds or reorders ideas here.
 
-- Table and config tracing at build time, including lookups that missed.
-- Edit-kind rules: comment-only, fixture-only, and code edits handled
-  differently.
-- Parser replay: re-run only the parse/generate paths a patch touches.
-- SQL-input features: map changed SQL fixtures to the tests that read them.
-- Held-out zero-miss validation on mutated patches before keeping an idea.
-- (Andrew: add the remaining ideas here.)
+1. **Worker sweep (scheduler idea, selector fixed).** A new scheduler that
+   runs integer-ms LPT for every worker count `k = 1..8` and picks the lowest
+   `makespan + 2000k`. Stop early when it equals the floor
+   `LB_k = max(longest_test, total / k) + 2000k`. On the full catalog this
+   picks `k = 4` at 36.817 s per patch against 40.349 s for the fixed three
+   workers.
+2. **AST edit-kind rules.** Parse old and new files with `ast`, classify each
+   edit (new branch, deleted or renamed name, fixture file, other), and apply
+   a rule per kind. Keep three states: affected, unaffected, unknown. Unknown
+   widens the selection. New lines have no coverage, so anchor them to the
+   enclosing function or class and to names they reference. Deleted names go
+   through static references and imports. Map fixture files such as
+   `tests/fixtures/identity.sql` to the tests that open them, recorded at
+   build time. Never skip comment-only or formatting edits: tests can read
+   `__doc__`, source text, or line numbers. Treat `getattr`, `importlib`,
+   `exec`, decorators, class bodies and module-level code as unknown.
+3. **Table and config entry tracing.** At build time, record which keys each
+   test looks up in SQLGlot's tables (`KEYWORDS`, `FUNCTIONS`, `TOKENS`,
+   dialect settings), including lookups that missed. A patch that edits one
+   entry then selects only tests that read that key, or that would now find
+   it. Example: Snowflake escape patch `4d63` drags in 275 tests (9.079 s)
+   with 0 failures under class-level coverage. A test that iterates, copies
+   or mutates a whole table depends on all of it.
+4. **Slack-aware group inclusion and full-suite fallback.** Price an
+   uncertain test by how much it raises the packed score, not by its own
+   duration: a test that fits under the busiest worker costs 0 s. Decide on
+   correlated tests as a group, since catching some but not all failing tests
+   still costs the full 300 s. Fall back to the full suite when its extra
+   cost is below `300 * P(miss)`. Do not tune drop thresholds on the public
+   patches: 0 misses on 30 patches still allows a 9.5% miss rate at 95%.
+5. **Pure-expression state checks (only if 1 to 4 leave expensive false
+   positives).** For an edit to a side-effect-free expression, select only
+   tests whose recorded inputs make the old and new expression disagree, such
+   as `n == 0` for `n > 0` to `n >= 0`. Count raised exceptions as a
+   difference. No SMT solvers or symbolic execution at selection time.
+6. **Parser-call replay (deferred).** Record the parser inputs each slow test
+   sends at build time and, at selection time, replay only the calls that
+   touch the patch. Skip the test when every output matches. Selector CPU
+   counts one to one against worker time, so this only pays off for slow,
+   multi-case tests such as `TestTranspile.test_identity`.
+7. **Held-out zero-miss validation.** Freeze a larger held-out set of mutated
+   and historical patches (see Benchmark) and require zero misses on it
+   before an idea is promoted.
+
+Ideas 2 to 6 add selector CPU. It is logged separately and not part of the
+keep decision, so note it in the description when it grows.
 
 ## Run log
 
