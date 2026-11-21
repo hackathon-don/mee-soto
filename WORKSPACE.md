@@ -63,44 +63,43 @@ The official starter files are from the
 
 ## Map-only selector
 
-`strategies/selectors/map_only.py` reads
-`strategies/selectors/file_map.json.gz`, an offline export of the pinned
-Don coverage index. The exporter accepts only the index SHA-256
-`9bb245fa41d26ddfbb5866d0791c969033d130ea93272d3742fe7491f3188107`, checks
-it before unpickling, and verifies the catalog identity
-`f3bdf0f41f64d10ff0d9edfa93b4c9bd0c296a8e770678d0a40d372c9882fc34`.
-The donor source is
-`hackathon-don/rwx-blast-radius@d8e4a935eb4261fa6dd32080b0614afbb3fc8b45`,
-path `maps/index.pkl.gz`; its SQLGlot base is
-`eb11aec4be8cb2122afe713a4816662c3f0fb2fa`.
+`MapSelector` is opt-in; `Config()` still selects all tests. The Docker
+builder runs `tools/build_file_map.py` against SQLGlot
+`tobymao/sqlglot@eb11aec4be8cb2122afe713a4816662c3f0fb2fa` and
+`sample/tests.json`. It starts one Python 3.13 child per catalog test, enables
+`sys.monitoring.PY_START` before importing pytest, and audits file opens and
+directory enumeration. The map records repository-relative source/fixture
+files and directory dependencies; runtime adds dependents of only the
+immediate parent directory of each changed file.
 
-Re-export from a trusted checkout:
+The deterministic gzip JSON uses schema 2 and embeds the exact
+`(number, id, file)` catalog identity and its digest. It is generated in the
+builder stage and is not committed. The builder copies the pinned
+`requirements.lock`, collector, schema helper, and `sample/tests.json`; it
+does not receive sample patches or answers. The final stage copies only the
+generated map and runtime application files, not pytest, test source, or
+collector tooling. Runtime validates schema, source pin, catalog identity,
+status partition, paths, and test numbers; malformed or missing maps fall back
+to all tests.
 
-```sh
-git clone https://github.com/hackathon-don/rwx-blast-radius.git "$HOME/rwx-blast-radius-don"
-git -C "$HOME/rwx-blast-radius-don" show d8e4a935eb4261fa6dd32080b0614afbb3fc8b45:maps/index.pkl.gz > "$HOME/don-index.pkl.gz"
-shasum -a 256 "$HOME/don-index.pkl.gz"
-python3 -m tools.export_file_map --index "$HOME/don-index.pkl.gz" --catalog sample/tests.json --output strategies/selectors/file_map.json.gz
-```
+Baseline failures, missing tests, and incomplete traces are always selected.
+Incomplete includes subprocess/fork use (descendants are not traced),
+timeouts, invalid results, and tests whose trace omitted their catalog file.
+Tests not started before the collector budget expires are recorded as missing,
+not silently discarded. At runtime, changed files must have exact file entries;
+an unmapped/new path, empty entry, or unsupported diff falls back to all tests.
+For directory reads, only tests that enumerated the changed file's immediate
+parent directory are added; a file-content edit does not affect ancestor
+directory listings. As with any pinned test-to-file map, changed control flow
+or hidden tests may not be represented by this catalog's measurements.
 
-The donor Makefile uses `KIT ?= ../blast-radius-sample` and consumes
-`$KIT/sample/tests.json`. Its catalog and this repo's `sample/tests.json`
-were compared across all `(number, id, file)` tuples:
-1,620 entries match exactly (identity SHA-256
-`f3bdf0f41f64d10ff0d9edfa93b4c9bd0c296a8e770678d0a40d372c9882fc34`; the
-raw catalog SHA-256 is `21257a93c58f4b0646c5122586d2141b4b340ad85b2f0bb251af3746de3f0dc2`).
-The exporter unions Python `run` and import-time `deft` masks with non-Python
-`files` masks, maps TPC-DS query/setup pseudo IDs to their real catalog test,
-and carries baseline failures and missing traces as always-selected IDs.
-It writes sorted JSON with deterministic gzip metadata.
-
-At runtime the selector validates schema, source pins, exact catalog
-`(number, id, file)` identity (durations may differ), paths, and all test
-numbers. A changed catalog or invalid map falls back to all tests. Renames
-consider both paths; any unmapped/new path, empty map entry, or unsupported diff
-falls back to all tests. A mapped file can still contain changed control flow
-not exercised by the pinned coverage run; file coverage is not a guarantee of
-failure detection on hidden patches.
+The collector uses four workers, a 360-second test-collection budget, and a
+90-second per-test timeout by default. The collection budget does not include
+base-image acquisition, SQLGlot source download, dependency installation, or
+final image assembly; those steps add to a clean Docker build's total time.
+Build logs report the full catalog partition (passed, baseline failures,
+incomplete, and missing); missing/incomplete tests are always selected. The
+final image has no tests or answers mounted at runtime.
 
 Opt in explicitly; `DEFAULT_CONFIG` remains all-tests:
 
