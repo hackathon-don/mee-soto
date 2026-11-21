@@ -1,4 +1,4 @@
-/output.jsonl
+/out/
 __pycache__/
 .venv/
 .pytest_cache/
