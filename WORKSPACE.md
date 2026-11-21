@@ -74,9 +74,9 @@ existing child process, with a 2-second bound per import. An exception, timeout,
 or missing child result conservatively retains that module's catalog-filtered
 importers; only an explicit successful probe clears this fallback. Pure Git
 renames are recognized from `rename from`/`rename to` metadata. Python renames
-probe the old import path and conservatively retain old-path importers even
-when the probe succeeds. Public sample results do not guarantee zero misses on
-hidden patches.
+probe the old import path and also consider old-path importers as candidates
+even when the probe succeeds. Public sample results do not guarantee zero
+misses on hidden patches.
 
 Treat `sample/answers.json` as scorer-only data. The sample runner mounts
 only the patches and the test list, and the Docker build excludes the
