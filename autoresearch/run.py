@@ -4,12 +4,11 @@
     python3 autoresearch/run.py loop --experiment NAME      # search split; keeps or reverts HEAD
     python3 autoresearch/run.py validate --experiment NAME  # validation split; humans only
 
-The loop runs on an `autoresearch-<tag>` branch. Each iteration evaluates the
+The loop runs on the `autoresearch` branch. Each iteration evaluates the
 experiment named at HEAD on the search split and compares it with the last
 kept run in `autoresearch/results.tsv`. HEAD is kept only when its simulated
 total is lower and it misses no commit the kept run caught; otherwise the
-branch is reset to the kept commit. The first loop run on a branch seeds the
-kept run. Rules for what a candidate commit may change are in program.md.
+branch is reset to the kept commit. The first loop run seeds the kept run. Rules for what a candidate commit may change are in program.md.
 """
 
 from __future__ import annotations
@@ -37,7 +36,8 @@ FIELDS = [
     "time", "branch", "commit", "experiment", "split", "status",
     "simulated_s", "misses", "missed", "selector_cpu_s", "description",
 ]
-BRANCH_PREFIX = "autoresearch-"
+LOOP_BRANCH = "autoresearch"
+PROGRAM = "autoresearch/program.md"
 
 # What a candidate commit may change relative to the last kept commit.
 NEW_FILE_DIRS = ("strategies/", "tools/")
@@ -89,6 +89,8 @@ def check_candidate(kept: str, experiment: str, ledger: list[dict]) -> list[str]
             continue
         if path in EDITABLE_FILES and status == "M":
             continue
+        if path == PROGRAM and status == "M":
+            continue
         if path in ADDITIVE_FILES and status == "M":
             removed = [
                 diff_line for diff_line in git("diff", "-U0", kept, "HEAD", "--", path).splitlines()
@@ -102,7 +104,8 @@ def check_candidate(kept: str, experiment: str, ledger: list[dict]) -> list[str]
 
     commits = {path.stem for path in (SAMPLE / "commits").glob("*.patch")}
     added = [
-        diff_line[1:] for diff_line in git("diff", "-U0", kept, "HEAD").splitlines()
+        diff_line[1:]
+        for diff_line in git("diff", "-U0", kept, "HEAD", "--", ".", f":(exclude){PROGRAM}").splitlines()
         if diff_line.startswith("+") and not diff_line.startswith("+++")
     ]
     leaked = sorted(
@@ -176,8 +179,8 @@ def main() -> int:
     branch = git("rev-parse", "--abbrev-ref", "HEAD")
     if git("status", "--porcelain", "--untracked-files=no"):
         fail("commit or stash tracked changes first")
-    if args.mode == "loop" and not branch.startswith(BRANCH_PREFIX):
-        fail(f"run the loop on an {BRANCH_PREFIX}<tag> branch, not {branch!r}")
+    if args.mode == "loop" and branch != LOOP_BRANCH:
+        fail(f"run the loop on the {LOOP_BRANCH} branch, not {branch!r}")
 
     ledger_path = LEDGERS[args.mode]
     ledger = [row for row in read_ledger(ledger_path) if args.mode == "validate" or row["branch"] == branch]

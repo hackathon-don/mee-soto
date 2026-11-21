@@ -1,5 +1,7 @@
 # Autoresearch program
 
+Driver: unassigned. Andrew names the one person or agent who runs the loop.
+
 This file is owned by Andrew. An agent running the loop reads it and never
 edits it. It adapts [karpathy/autoresearch](https://github.com/karpathy/autoresearch)
 to test selection: the agent proposes one idea at a time, each idea is scored
@@ -13,25 +15,24 @@ and logged next to it but is not part of the keep decision.
 
 ## One driver
 
-Only one person or agent runs the loop at a time: the driver. Everyone else
-adds ideas to the queue below, by committing to `program.md` on the
+Only one person or agent runs the loop: the driver named above. Everyone else
+adds ideas to the queue below by committing to `program.md` on the
 `autoresearch` branch, and does not run `make autoresearch`. The driver never
-edits this file.
+edits this file. Everything happens on the `autoresearch` branch; there are no
+per-person or per-run branches.
 
-## Setup (once per research run)
+## Setup (once, by the driver)
 
-1. Start from the `autoresearch` branch, which holds this directory. Create a
-   run branch: `git checkout -b autoresearch-<tag>`, where `<tag>` names the
-   run, such as `autoresearch-nov22`.
+1. Check out the `autoresearch` branch.
 2. Seed the kept run with the current best experiment, for example
-   `make autoresearch EXPERIMENT=map`. The first iteration on a branch is
-   always recorded as `seed`.
+   `make autoresearch EXPERIMENT=map`. The first iteration is always recorded
+   as `seed`.
 
 ## One iteration
 
-1. Pick the next idea from the queue on the `autoresearch` branch
-   (`git show autoresearch:autoresearch/program.md`). Ideas added after the
-   run branch was created are there, not in the run branch's copy.
+1. Run `git pull --no-rebase` to pick up new ideas, then take the next idea
+   from the queue below. Never rebase: the kept commit must stay an ancestor
+   of HEAD.
 2. Implement it as a new strategy class in its own file under
    `strategies/selectors/` or `strategies/schedulers/`, plus a new
    `EXPERIMENTS` entry in `config.py` named for the idea. Optional build-time
@@ -47,7 +48,9 @@ edits this file.
    - `CRASH`: the run failed or its output was rejected. Treated like discard.
    - `REJECT`: the commit breaks a rule below, so it is not run. Treated like
      discard.
-5. Read the result, note what it teaches, and pick the next idea. Do not stop
+5. After a `KEEP`, push. Never push a commit before its decision, so a reset
+   never needs a force push.
+6. Read the result, note what it teaches, and pick the next idea. Do not stop
    to ask whether to continue.
 
 ## Rules
@@ -60,6 +63,8 @@ edits this file.
   additions to `config.py`, and `Dockerfile` edits for build-time indexing.
   `make autoresearch` rejects a commit that touches anything else, including
   `score.py`, `main.py`, `Makefile`, `sample/`, `tests/`, and this directory.
+  The one exception is `program.md` commits from others, pulled in with new
+  ideas; the driver itself still never edits it.
 - Never read `sample/answers.json`, the validation patches, or
   `autoresearch/validation.tsv`, and never name a sample commit id in code.
   The loop rejects added lines that name one.
@@ -99,7 +104,7 @@ These are full-sample numbers from earlier research, not search-split scores.
 
 Ideas 1 to 7 come from Andrew's first research notes, in their recommended
 order; 8 to 11 and the safety harness come from his second notes. Take the
-first idea not yet tried on the run branch. Anyone but the driver adds or
+first idea not yet tried. Anyone but the driver adds or
 reorders ideas here; Andrew has the final say on order.
 
 1. **Worker sweep (scheduler idea, selector fixed).** A new scheduler that
