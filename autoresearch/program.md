@@ -1,6 +1,6 @@
 # Autoresearch program
 
-Driver: unassigned. Andrew names the one person or agent who runs the loop.
+Driver: bandrew
 
 This file is owned by Andrew. An agent running the loop reads it and never
 edits it. It adapts [karpathy/autoresearch](https://github.com/karpathy/autoresearch)
