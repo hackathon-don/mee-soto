@@ -1,6 +1,9 @@
 # Blast Radius starter
 
-A working submission for the Blast Radius track. It runs every test on every commit, so it never misses a failure and scores badly. Your job is to run less without missing.
+A working submission for the Blast Radius track. The default runs every test
+on every commit. The opt-in `MapSelector` uses a precomputed file map only,
+does not execute tests at runtime, and falls back to all tests for unknown
+changes.
 
 ## The problem
 
