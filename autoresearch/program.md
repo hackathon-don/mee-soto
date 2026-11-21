@@ -36,6 +36,8 @@ and logged next to it but is not part of the keep decision.
    - `DISCARD`: anything else. The branch is reset to the kept commit; the
      printed SHA can restore the idea for inspection.
    - `CRASH`: the run failed or its output was rejected. Treated like discard.
+   - `REJECT`: the commit breaks a rule below, so it is not run. Treated like
+     discard.
 5. Read the result, note what it teaches, and pick the next idea. Do not stop
    to ask whether to continue.
 
@@ -77,12 +79,12 @@ and logged next to it but is not part of the keep decision.
 | What | Patches | Simulated s | Misses |
 | --- | ---: | ---: | ---: |
 | Answer-key floor | 30 public | 94.351 | 0 |
-| Don's tuned selector (closed PRs) | 30 public | 105.896 | 0 |
+| Don's tuned selector (reported from his PRs) | 30 public | 105.896 | 0 |
 | `map` experiment | 30 public | 851.938 | 0 |
 | `baseline` (all tests) | 30 public | 1,210.470 | 0 |
 
 These are full-sample numbers from earlier research, not search-split scores.
-`ImpactSelector` is on main but has no `EXPERIMENTS` entry yet.
+`ImpactSelector` (#15) is on main but has no `EXPERIMENTS` entry yet.
 
 ## Idea queue
 

@@ -73,16 +73,16 @@ def append_ledger(path: Path, row: dict) -> None:
         writer.writerow(row)
 
 
-def check_candidate(kept: str, experiment: str, ledger: list[dict]) -> None:
-    """Reject a HEAD that changes anything outside the editable surface."""
+def check_candidate(kept: str, experiment: str, ledger: list[dict]) -> list[str]:
+    """List the ways HEAD breaks the rules in program.md; empty means it may run."""
     if subprocess.run(["git", "merge-base", "--is-ancestor", kept, "HEAD"], cwd=ROOT).returncode:
         fail(f"kept commit {kept[:7]} is not an ancestor of HEAD")
     if git("rev-parse", "HEAD") == kept:
         fail("HEAD is the kept commit; commit a new experiment first")
-    if any(row["experiment"] == experiment for row in ledger):
-        fail(f"experiment {experiment!r} was already evaluated; name each idea once")
 
     problems = []
+    if any(row["experiment"] == experiment for row in ledger):
+        problems.append(f"experiment {experiment!r} was already evaluated; name each idea once")
     for line in git("diff", "--name-status", "--no-renames", kept, "HEAD").splitlines():
         status, path = line.split("\t", 1)
         if status == "A" and path.startswith(NEW_FILE_DIRS):
@@ -111,8 +111,7 @@ def check_candidate(kept: str, experiment: str, ledger: list[dict]) -> None:
     )
     if leaked:
         problems.append(f"added lines name sample commits: {', '.join(leaked)}")
-    if problems:
-        fail("candidate rejected:\n  " + "\n  ".join(problems))
+    return problems
 
 
 def prepare_split(split: str) -> Path:
@@ -184,15 +183,22 @@ def main() -> int:
     ledger = [row for row in read_ledger(ledger_path) if args.mode == "validate" or row["branch"] == branch]
     head = git("rev-parse", "HEAD")
     kept_row = next((row for row in reversed(ledger) if row["status"] in {"seed", "keep"}), None)
+    problems = []
     if args.mode == "loop" and kept_row is not None:
-        check_candidate(kept_row["commit"], args.experiment, ledger)
+        problems = check_candidate(kept_row["commit"], args.experiment, ledger)
 
     split = SPLIT_FOR_MODE[args.mode]
-    evaluation = run_experiment(args.experiment, prepare_split(split))
-    if args.mode == "loop":
-        status, reason = decide(evaluation, kept_row)
+    if problems:
+        evaluation = {"ok": False, "code": "rejected"}
+        status, reason = "reject", "outside the rules: " + "; ".join(problems)
     else:
-        status, reason = ("crash", f"run rejected: {evaluation['code']}") if not evaluation["ok"] else ("validated", "")
+        evaluation = run_experiment(args.experiment, prepare_split(split))
+        if args.mode == "loop":
+            status, reason = decide(evaluation, kept_row)
+        elif evaluation["ok"]:
+            status, reason = "validated", ""
+        else:
+            status, reason = "crash", f"run rejected: {evaluation['code']}"
 
     missed = evaluation.get("missed_commits", [])
     simulated = evaluation.get("simulated_milliseconds")
@@ -216,7 +222,7 @@ def main() -> int:
         print(f"misses:          {len(missed)}{' (' + ', '.join(missed) + ')' if missed else ''}")
         print(f"selector CPU:    {evaluation['cpu'] or 'not measured'} s (local, reported separately)")
     if args.mode == "loop":
-        if status in {"discard", "crash"} and kept_row is not None:
+        if status in {"discard", "crash", "reject"} and kept_row is not None:
             git("reset", "--hard", kept_row["commit"])
             reason += f"; reset to {kept_row['commit'][:7]} (restore with: git branch <name> {head[:7]})"
         print(f"decision:        {status.upper()} - {reason}")
