@@ -3,6 +3,7 @@ SHELL := /bin/bash
 
 IMAGE ?= blast-radius-entry
 DEV_IMAGE ?= $(IMAGE)-dev
+NATIVE_PLATFORM = linux/$(shell docker version -f '{{.Server.Arch}}')
 SAMPLE := $(CURDIR)/sample
 OUT := $(CURDIR)/out
 # Selections replayed by make schedule: saved (from make select) or ideal
@@ -32,9 +33,9 @@ e2e: build
 
 # Builds and scores a native-arch image under the same scorer limits.
 e2e-dev:
-	docker build --build-arg BASE=python:3.13-slim --tag $(DEV_IMAGE) .
+	docker build --platform $(NATIVE_PLATFORM) --build-arg BASE=python:3.13-slim --tag $(DEV_IMAGE) .
 	@mkdir -p $(OUT)
-	docker run $(RUN_FLAGS) $(DEV_IMAGE) 2>&1 > $(OUT)/e2e-dev.jsonl | tee $(OUT)/e2e-dev.log >&2
+	docker run --platform $(NATIVE_PLATFORM) $(RUN_FLAGS) $(DEV_IMAGE) 2>&1 > $(OUT)/e2e-dev.jsonl | tee $(OUT)/e2e-dev.log >&2
 	python3 score.py $(SAMPLE) $(SAMPLE)/answers.json $(OUT)/e2e-dev.jsonl
 
 sample: e2e
