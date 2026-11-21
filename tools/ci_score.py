@@ -4,6 +4,7 @@ import argparse
 import ast
 from dataclasses import dataclass
 from decimal import Decimal
+import os
 import re
 from statistics import median
 import subprocess
@@ -67,17 +68,17 @@ def parse_score(output: str) -> Score:
     )
 
 
-def score(experiment: str) -> Score:
+def score(experiment: str, *, log_score: bool = True) -> Score:
     result = subprocess.run(
         ["make", "e2e", f"EXPERIMENT={experiment}"], stdout=subprocess.PIPE, text=True
     )
-    sys.stderr.write(result.stdout)
-    if result.returncode:
-        raise SystemExit(result.returncode)
+    if log_score or result.returncode:
+        sys.stderr.write(result.stdout)
+    result.check_returncode()
     try:
         return parse_score(result.stdout)
     except ValueError as error:
-        raise SystemExit(f"{experiment}: {error}") from error
+        raise ValueError(f"{experiment}: {error}") from error
 
 
 def print_experiment(experiment: str, runs: list[Score], baseline: Score) -> None:
@@ -89,6 +90,15 @@ def print_experiment(experiment: str, runs: list[Score], baseline: Score) -> Non
         print(f"| {label} | {run.simulated:.2f} s | {run.cpu:.2f} s | {run.missed} | {run.total:.2f} s |")
 
 
+def print_scoring_check(commit: str, passed: bool) -> None:
+    tests = {"success": "passed", "failure": "failed"}.get(os.getenv("TEST_OUTCOME"), "not run")
+    print("No new experiments in this change, so there is no score to report.\n")
+    print(f"Scoring check: {'passed' if passed else 'failed'}  ")
+    print(f"Tests: {tests}\n")
+    print("To get a score, add a new experiment name to config.py.\n")
+    print(f"Commit hash: {commit}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("base", help="Previous branch tip or PR base commit SHA")
@@ -96,13 +106,18 @@ def main() -> None:
         experiments = added_experiments(parser.parse_args().base)
     except (ValueError, subprocess.CalledProcessError) as error:
         parser.error(str(error))
-    if not experiments:
-        print("No new experiments to score.")
-        return
-
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-    results = {experiment: [score(experiment) for _ in range(3)] for experiment in experiments}
-    baseline = score("baseline")
+    try:
+        if not experiments:
+            score("map", log_score=False)
+            print_scoring_check(commit, passed=True)
+            return
+        results = {experiment: [score(experiment) for _ in range(3)] for experiment in experiments}
+        baseline = score("baseline")
+    except (ValueError, subprocess.CalledProcessError) as error:
+        if not experiments:
+            print_scoring_check(commit, passed=False)
+        parser.exit(1, f"{error}\n")
 
     for experiment, runs in results.items():
         print_experiment(experiment, runs, baseline)
