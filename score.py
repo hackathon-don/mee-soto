@@ -11,7 +11,6 @@ import argparse
 import base64
 import json
 import math
-import platform
 import sys
 from pathlib import Path
 from typing import Any
@@ -235,16 +234,27 @@ def _run_report(arguments: list[str]) -> int:
         help="CPU time your container used, user and system together, if you measured it",
     )
     options = parser.parse_args(arguments)
+    selector_architecture = None
     if options.cpu_log is not None:
         try:
+            log_lines = options.cpu_log.read_text("utf-8").splitlines()
             measurements = [
                 float(line.removeprefix("selector_cpu_seconds="))
-                for line in options.cpu_log.read_text("utf-8").splitlines()
+                for line in log_lines
                 if line.startswith("selector_cpu_seconds=")
             ]
             if len(measurements) != 1:
                 raise ValueError("expected exactly one selector CPU measurement")
             options.cpu_seconds = measurements[0]
+            architectures = [
+                line.removeprefix("selector_architecture=").strip()
+                for line in log_lines
+                if line.startswith("selector_architecture=")
+            ]
+            if len(architectures) > 1:
+                raise ValueError("expected at most one selector architecture")
+            if architectures:
+                selector_architecture = architectures[0]
         except (OSError, ValueError) as error:
             parser.error(str(error))
     if options.cpu_seconds is not None and (
@@ -311,10 +321,9 @@ def _run_report(arguments: list[str]) -> int:
         "The leaderboard measures it on its own amd64 host. Compare strategies on the "
         "simulated total, and use the estimated total only as a rough guide."
     )
-    architecture = platform.machine()
-    if architecture.lower() not in {"amd64", "x86_64"}:
+    if selector_architecture and selector_architecture.lower() not in {"amd64", "x86_64"}:
         print(
-            f"This machine is {architecture}. For a CPU number closer to the judge's, "
+            f"This machine is {selector_architecture}. For a CPU number closer to the judge's, "
             "run `make e2e-amd64`."
         )
     return 0
