@@ -230,3 +230,12 @@ seconds, and the commit subject.
     an entire same-module cohort and charge its setup once. Compare this with a
     bounded fresh verification run. Keep the cohort unless every member completes
     an unmodified full test lifecycle successfully.
+
+15. **Prioritize verification before the failure cutoff.** Use regression-test
+    prioritization to rank already planned module groups by the fixed schedule
+    cost avoided per unit of verification CPU. Preserve order within a module,
+    the original tests, deadline, failure ceiling, and fallback behavior.
+16. **Budget a deferred test against the actual schedule.** Consider full
+    independently verified execution of a deferred test only when the fixed
+    schedule savings cover the measured CPU and setup estimate. Keep it on
+    timeout, partial verification, or failed lifecycle checks.
