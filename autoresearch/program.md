@@ -14,8 +14,8 @@ and logged next to it but is not part of the keep decision.
 ## Setup (once per research run)
 
 1. Start from the `autoresearch` branch, which holds this directory. Create a
-   run branch: `git checkout -b autoresearch-<tag>`, where
-   `<tag>` names the run, such as `autoresearch-nov22`.
+   run branch: `git checkout -b autoresearch-<tag>`, where `<tag>` names the
+   run, such as `autoresearch-nov22`.
 2. Seed the kept run with the current best experiment, for example
    `make autoresearch EXPERIMENT=map`. The first iteration on a branch is
    always recorded as `seed`.
@@ -183,8 +183,7 @@ selector. Put them under `tools/` and run them by hand, outside
   are harmless, or that selection is monotone across combined patches.
 
 Ideas 2 to 6, 8, 10 and 11 add selector CPU. It is logged separately and not
-part of the
-keep decision, so note it in the description when it grows.
+part of the keep decision, so note it in the description when it grows.
 
 ## Run log
 
