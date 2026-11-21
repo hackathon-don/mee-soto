@@ -12,6 +12,7 @@ Protocol on `out_fd`, one JSON object per line:
 
 from __future__ import annotations
 
+import importlib
 import os
 import pickle
 import signal
@@ -194,7 +195,15 @@ class _Result(unittest.TestResult):
             self._fail(test)
 
 
-def child_main(root: str, tests: list[tuple], out_fd: int, base: str | None = None, fixture_edits: list[str] | None = None) -> None:
+def child_main(
+    root: str,
+    tests: list[tuple],
+    out_fd: int,
+    base: str | None = None,
+    fixture_edits: list[str] | None = None,
+    import_checks: list[str] | None = None,
+    import_timeout: float = 2.0,
+) -> None:
     """tests: (number, pytest node id, timeout seconds[, tpcds query subset]) in run order."""
     out = os.fdopen(out_fd, "w", buffering=1)
 
@@ -215,6 +224,18 @@ def child_main(root: str, tests: list[tuple], out_fd: int, base: str | None = No
     os.environ["PYTHONPATH"] = root
     os.environ["SKIP_INTEGRATION"] = "0"
     signal.signal(signal.SIGALRM, _on_alarm)
+
+    for module_name in import_checks or []:
+        ok = False
+        try:
+            signal.setitimer(signal.ITIMER_REAL, import_timeout)
+            importlib.import_module(module_name)
+            ok = True
+        except BaseException:  # noqa: BLE001 - inconclusive imports are conservative failures
+            pass
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+        emit({"i": module_name, "ok": ok})
 
     import concurrent.futures
 

@@ -43,6 +43,9 @@ def parse_patch(text: str) -> list[FilePatch]:
     patches: list[FilePatch] = []
     current: FilePatch | None = None
     hunk: Hunk | None = None
+    rename_from: str | None = None
+    rename_to: str | None = None
+    rename_header_pending = False
     last_sign = " "
     lines = text.split("\n")
     i = 0
@@ -54,12 +57,39 @@ def parse_patch(text: str) -> list[FilePatch]:
             new_seen = sum(l[0] in (" ", "+") for l in hunk.lines)
             file_header = old_seen >= hunk.old_len and new_seen >= hunk.new_len
         if file_header:
-            current = FilePatch(_strip_prefix(line[4:]), _strip_prefix(lines[i + 1][4:]))
-            patches.append(current)
+            old_path = _strip_prefix(line[4:])
+            new_path = _strip_prefix(lines[i + 1][4:])
+            if rename_header_pending and current is not None:
+                current.old_path = old_path
+                current.new_path = new_path
+                rename_header_pending = False
+            else:
+                current = FilePatch(old_path, new_path)
+                patches.append(current)
             hunk = None
             i += 2
             continue
-        if line.startswith("diff --git ") or line.startswith("index "):
+        if line.startswith("diff --git "):
+            current = None
+            hunk = None
+            rename_from = None
+            rename_to = None
+            rename_header_pending = False
+            i += 1
+            continue
+        if line.startswith("rename from "):
+            rename_from = line[len("rename from "):].strip()
+            i += 1
+            continue
+        if line.startswith("rename to "):
+            rename_to = line[len("rename to "):].strip()
+            if rename_from is not None:
+                current = FilePatch(rename_from, rename_to)
+                patches.append(current)
+                rename_header_pending = True
+            i += 1
+            continue
+        if line.startswith("index "):
             hunk = None
             i += 1
             continue

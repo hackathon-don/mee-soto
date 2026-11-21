@@ -67,11 +67,16 @@ raises an error. The original environment-variable knobs (`BR_SG`, `BR_MAPS`,
 the impact implementation, not `Config`. `BR_MAPS` contains `index.pkl.gz`,
 `cpu.json`, and the build-generated `static.pkl.gz`.
 
-The selector's internal `pack.py` estimates verification costs using Don's
-unchanged 1–8-worker model. It does not replace the final `LptScheduler`, which
-still uses `config.workers` (three by default). Thresholds and heavy-test
-deferral are unchanged; public sample results do not guarantee zero misses
-on hidden patches.
+The selector's internal `pack.py` estimates verification costs; it does not
+replace the final `LptScheduler`, which uses `config.workers` (three by
+default). Patched-tree verification also probes changed Python imports in its
+existing child process, with a 2-second bound per import. An exception, timeout,
+or missing child result conservatively retains that module's catalog-filtered
+importers; only an explicit successful probe clears this fallback. Pure Git
+renames are recognized from `rename from`/`rename to` metadata. Python renames
+probe the old import path and conservatively retain old-path importers even
+when the probe succeeds. Public sample results do not guarantee zero misses on
+hidden patches.
 
 Treat `sample/answers.json` as scorer-only data. The sample runner mounts
 only the patches and the test list, and the Docker build excludes the

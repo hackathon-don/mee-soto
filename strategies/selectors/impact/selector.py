@@ -27,6 +27,7 @@ PARALLEL = int(os.environ.get("BR_PARALLEL", "2"))
 # are included unrun, so the answers always print inside the 180 s limit.
 WALL_BUDGET = float(os.environ.get("BR_WALL_BUDGET", "140"))
 HARD_GRACE = float(os.environ.get("BR_HARD_GRACE", "20"))
+IMPORT_PROBE_TIMEOUT = 2.0
 
 # Tests we never run in-process: they spawn process pools of their own or are
 # too slow to be worth verifying. They are included whenever they are candidates.
@@ -74,6 +75,16 @@ def bits(m: int) -> list[int]:
         out.append(low.bit_length() - 1)
         m ^= low
     return out
+
+
+def _filter_import_masks(import_checks: list[str], masks: dict[str, int], catalog_numbers) -> dict[str, int]:
+    catalog_mask = sum(1 << n for n in catalog_numbers)
+    filtered = {}
+    for module in import_checks:
+        mask = masks.get(module, 0) & catalog_mask
+        if mask:
+            filtered[module] = mask
+    return filtered
 
 
 # ---------------------------------------------------------------- overlay
@@ -126,7 +137,7 @@ def build_overlay(base: str, changes: dict[str, str | None], work: str) -> str:
 class Plan:
     __slots__ = (
         "cid", "include", "run", "notes", "failed", "root", "error", "cpu", "subsets", "fixture_edits",
-        "est_run_ms", "wall", "deferred", "child_cpu",
+        "est_run_ms", "wall", "deferred", "child_cpu", "pending_imports", "failed_imports",
     )
 
     def __init__(self, cid):
@@ -144,6 +155,8 @@ class Plan:
         self.wall = 0.0
         self.deferred: set[int] = set()
         self.child_cpu = 0.0
+        self.pending_imports: dict[str, int] = {}
+        self.failed_imports: set[int] = set()
 
 
 def choose(
@@ -324,6 +337,8 @@ def spawn_child(plan: Plan, tests: list[int], ids: dict[int, str], limits: dict[
                 w,
                 base=SG,
                 fixture_edits=plan.fixture_edits,
+                import_checks=list(plan.pending_imports),
+                import_timeout=IMPORT_PROBE_TIMEOUT,
             )
         except BaseException:  # noqa: BLE001
             pass
@@ -335,7 +350,7 @@ def spawn_child(plan: Plan, tests: list[int], ids: dict[int, str], limits: dict[
 
 
 def run_all(plans: list[Plan], ids, limits, deadline: float):
-    queue: list[tuple[Plan, list[int]]] = [(p, p.run) for p in plans if p.run]
+    queue: list[tuple[Plan, list[int]]] = [(p, p.run) for p in plans if p.run or p.pending_imports]
     active: dict[int, Child] = {}
     while queue or active:
         while queue and len(active) < PARALLEL:
@@ -369,6 +384,11 @@ def run_all(plans: list[Plan], ids, limits, deadline: float):
                         continue
                     if "cpu_total" in msg:
                         ch.plan.child_cpu += msg["cpu_total"]
+                    elif "i" in msg:
+                        module = msg["i"]
+                        mask = ch.plan.pending_imports.pop(module, None)
+                        if mask is not None and not msg.get("ok", False):
+                            ch.plan.failed_imports.update(bits(mask))
                     elif "s" in msg:
                         ch.current = msg["s"]
                         ch.limit = limits.get(msg["s"], 30.0) + 5.0
@@ -420,6 +440,11 @@ def run_all(plans: list[Plan], ids, limits, deadline: float):
                 except ProcessLookupError:
                     pass
                 finish(ch, active, queue, now)
+
+
+    for plan in plans:
+        for mask in plan.pending_imports.values():
+            plan.include.update(bits(mask))
 
 
 def finish(ch: Child, active, queue, now):
@@ -496,9 +521,8 @@ def analyze_commit(ctx: Context, cid: str, text: str) -> Analysis:
     imp = ctx.an.analyze(parse_patch(text))
     plan.notes.extend(imp.notes)
     candidate_mask = imp.candidates
-    for importers in imp.import_fail_masks.values():
-        candidate_mask |= importers
     cand = [n for n in bits(candidate_mask) if n in ms]
+    plan.pending_imports = _filter_import_masks(imp.import_checks, imp.import_fail_masks, ms)
     must = [n for n in bits(imp.must_fail) if n in ms]
     commit_never, commit_cpu = never, cpu
     tp = ix.pseudo.get("tpcds")
@@ -565,7 +589,7 @@ class ImpactSelector:
                 tp = ctx.ix.pseudo.get("tpcds")
                 if tp and tp["test"] in plan.subsets and tp["test"] not in plan.run:
                     del plan.subsets[tp["test"]]
-                if plan.run:
+                if plan.run or plan.pending_imports:
                     plan.root = build_overlay(SG, {k: v for k, v in a.imp.new_files.items() if k}, os.path.join(WORK, cid))
                 log(f"{cid}: cand={len(a.cand)} must={len(a.must)} include={len(plan.include)} run={len(plan.run)} {plan.notes[:3]}")
             except Exception as e:  # noqa: BLE001
@@ -575,7 +599,7 @@ class ImpactSelector:
                 log(f"{cid}: analysis failed, running everything: {e!r}")
             plans.append(plan)
 
-        if any(p.run for p in plans):
+        if any(p.run or p.pending_imports for p in plans):
             preimport()
             run_all(plans, ids, limits, self.start_wall + WALL_BUDGET)
 
@@ -585,7 +609,7 @@ class ImpactSelector:
     def _selected(plans: list[Plan]) -> Iterator[tuple[str, list[int]]]:
         for plan in plans:
             settle_deferred(plan)
-            selected = sorted(plan.include | plan.failed)
+            selected = sorted(plan.include | plan.failed | plan.failed_imports)
             yield plan.cid, selected
             log(
                 f"{plan.cid}: selected={len(selected)} failed_run={sorted(plan.failed)[:10]} "

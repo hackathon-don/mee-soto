@@ -1,0 +1,15 @@
+diff --git a/sqlglot/parser.py b/sqlglot/parser_moved.py
+similarity index 64%
+rename from sqlglot/parser.py
+rename to sqlglot/parser_moved.py
+index 18e41b3..cfafc25 100644
+--- a/sqlglot/parser.py
++++ b/sqlglot/parser_moved.py
+@@ -1,5 +1,5 @@
+ def parse(text):
+-    return text.strip()
++    return text.rstrip()
+-
++
+ def helper():
+     return 1
