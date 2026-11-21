@@ -15,10 +15,28 @@ failure, and the selector's own CPU time. Lower is better.
    `linux/amd64` explicitly, even on an ARM host.
 2. Clone the repository into a path without spaces. In the repo root, run
    `docker version` (check for both Client and Server), `make --version`,
-   and `python3 --version`, then run `make sample`.
+   and `python3 --version`, then run `make e2e`.
 3. Start changes on separate branches. Include the sample score and miss
    count in each pull request. Use `make check` for output validation, not
    as a substitute for checking the miss count.
+
+## Commands
+
+| Command | Runs | Output |
+| --- | --- | --- |
+| `make e2e` (alias `make sample`) | Selector and scheduler in the image, under the scorer's limits, then the sample scorer | `out/e2e.jsonl` |
+| `make check` | Same run, format check only | `out/e2e.jsonl` |
+| `make select` | Selector only, in the image | `out/picks.jsonl`, one `{"commit", "selected"}` line a patch |
+| `make schedule` | Scheduler only, on the host, over `out/picks.jsonl`, then the sample scorer | `out/schedule-saved.jsonl` |
+| `make schedule SOURCE=ideal` | Scheduler only, over the sample's known failing tests | `out/schedule-ideal.jsonl` |
+| `make test` | Unit tests, on the host | |
+
+Run `make select` once, then `make schedule` after each scheduler change: the
+selection stays fixed, so score differences come from scheduling alone.
+`SOURCE=ideal` reads `sample/answers.json` on the host, never in the image; it
+shows the best score a scheduler could reach with a perfect selector. The same
+modes run directly as `python3 main.py [--data DIR] [select | schedule
+--picks FILE | schedule --ideal FILE]`.
 
 ## Selection and scheduling interface
 

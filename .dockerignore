@@ -4,4 +4,4 @@
 .pytest_cache/
 sample/*
 !sample/tests.json
-output.jsonl
+out/
