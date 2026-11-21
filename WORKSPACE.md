@@ -26,6 +26,7 @@ failure, and the selector's own CPU time. Lower is better.
 | Command | Runs | Output |
 | --- | --- | --- |
 | `make e2e` (alias `make sample`) | Selector and scheduler in the image, under the scorer's limits, then the sample scorer | `out/e2e.jsonl` |
+| `make e2e-amd64` | Alias of `make e2e`, explicitly naming the judge's linux/amd64 architecture | `out/e2e.jsonl` |
 | `make e2e-dev` | Same limits and scorer, native architecture with a separate `blast-radius-entry-dev` image and unpinned Python base | `out/e2e-dev.jsonl` |
 | `make check` | Same run, format check only | `out/e2e.jsonl` |
 | `make select` | Selector only, in the image | `out/picks.jsonl`, one `{"commit", "selected"}` line a patch |

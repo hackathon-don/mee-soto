@@ -40,7 +40,7 @@ make check    # the output's format only
 
 `make sample` (alias `make e2e`) prints your simulated seconds and misses, which are exact for that output. The board adds the CPU seconds your container used and takes the middle of 3 runs, so expect it a little higher. Your program never sees `sample/answers.json`: only the patches and `tests.json` are mounted.
 
-`make e2e` stays on linux/amd64 with the pinned base. `make e2e-dev` uses
+`make e2e` (also `make e2e-amd64`) stays on linux/amd64 with the pinned base. `make e2e-dev` uses
 `python:3.13-slim` and a separate `blast-radius-entry-dev` image tag; its timings
 and wheels may differ from the judge. Container stderr is shown in the terminal
 and saved to `out/e2e.log`, `out/e2e-dev.log`, `out/check.log`, or `out/select.log`

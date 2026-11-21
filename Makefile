@@ -19,7 +19,7 @@ RUN_FLAGS := --rm --network none --cpus 2 \
 	--volume $(SAMPLE)/commits:/data/commits:ro \
 	--volume $(SAMPLE)/tests.json:/data/tests.json:ro
 
-.PHONY: build e2e e2e-dev sample check select schedule test
+.PHONY: build e2e e2e-dev e2e-amd64 sample check select schedule test
 
 build:
 	docker build --platform linux/amd64 --tag $(IMAGE) .
@@ -39,6 +39,9 @@ e2e-dev:
 	python3 score.py $(SAMPLE) $(SAMPLE)/answers.json $(OUT)/e2e-dev.jsonl
 
 sample: e2e
+
+# Explicit alias for the judge-compatible amd64 run.
+e2e-amd64: e2e
 
 # The output's rules only: every line well formed and every commit answered.
 # A wrong selection still passes here; make e2e counts the misses.
