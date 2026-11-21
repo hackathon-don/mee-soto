@@ -29,15 +29,15 @@ build:
 # scores what it printed.
 e2e: build
 	@mkdir -p $(OUT)
-	docker run --platform linux/amd64 $(RUN_FLAGS) $(IMAGE) python /app/main.py --experiment $(EXPERIMENT) 2>&1 > $(OUT)/e2e.jsonl | tee $(OUT)/e2e.log >&2
-	python3 score.py $(SAMPLE) $(SAMPLE)/answers.json $(OUT)/e2e.jsonl
+	docker run --platform linux/amd64 $(RUN_FLAGS) $(IMAGE) python /app/local_cpu.py python /app/main.py --experiment $(EXPERIMENT) 2>&1 > $(OUT)/e2e.jsonl | tee $(OUT)/e2e.log >&2
+	python3 score.py $(SAMPLE) $(SAMPLE)/answers.json $(OUT)/e2e.jsonl --cpu-log $(OUT)/e2e.log
 
 # Builds and scores a native-arch image under the same scorer limits.
 e2e-dev:
 	docker build --platform $(NATIVE_PLATFORM) --build-arg BASE=python:3.13-slim --tag $(DEV_IMAGE) .
 	@mkdir -p $(OUT)
-	docker run --platform $(NATIVE_PLATFORM) $(RUN_FLAGS) $(DEV_IMAGE) python /app/main.py --experiment $(EXPERIMENT) 2>&1 > $(OUT)/e2e-dev.jsonl | tee $(OUT)/e2e-dev.log >&2
-	python3 score.py $(SAMPLE) $(SAMPLE)/answers.json $(OUT)/e2e-dev.jsonl
+	docker run --platform $(NATIVE_PLATFORM) $(RUN_FLAGS) $(DEV_IMAGE) python /app/local_cpu.py python /app/main.py --experiment $(EXPERIMENT) 2>&1 > $(OUT)/e2e-dev.jsonl | tee $(OUT)/e2e-dev.log >&2
+	python3 score.py $(SAMPLE) $(SAMPLE)/answers.json $(OUT)/e2e-dev.jsonl --cpu-log $(OUT)/e2e-dev.log
 
 # Explicit alias for the judge-compatible amd64 run.
 e2e-amd64: e2e

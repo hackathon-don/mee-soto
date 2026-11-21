@@ -32,7 +32,7 @@ RUN python /build/tools/build_file_map.py \
 # name-index build below waits for the collector instead of competing with it.
 FROM deps AS runtime
 COPY --from=map-builder /out/file_map.json.gz /app/strategies/selectors/file_map.json.gz
-COPY main.py config.py /app/
+COPY main.py config.py local_cpu.py /app/
 COPY strategies/ /app/strategies/
 WORKDIR /app
 RUN python -m strategies.selectors.impact.static /opt/sg strategies/selectors/impact/maps/index.pkl.gz strategies/selectors/impact/maps/static.pkl.gz \
