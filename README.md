@@ -38,7 +38,7 @@ make e2e-dev  # same flow on the host's native architecture for a faster local l
 make check    # the output's format only
 ```
 
-`make sample` (alias `make e2e`) prints your simulated seconds and misses, which are exact for that output. The board adds the CPU seconds your container used and takes the middle of 3 runs, so expect it a little higher. Your program never sees `sample/answers.json`: only the patches and `tests.json` are mounted.
+`make sample` (alias `make e2e`) prints your simulated seconds and misses, which are exact for that output. The board adds the CPU seconds your container used and takes the middle of 3 runs, so expect it a little higher. See the [sample data rules](AGENTS.md#hard-rules) before changing the runner.
 
 `make e2e` (also `make e2e-amd64`) stays on linux/amd64 with the pinned base. `make e2e-dev` uses
 `python:3.13-slim` and a separate `blast-radius-entry-dev` image tag; its timings
@@ -87,5 +87,5 @@ Push to a public GitHub repository with the `Dockerfile` at its top, then enter 
 - pytest 9 prints a test as `PASSED` beside `SUBFAILED` lines when one of its subtests fails. That test failed.
 - sqlglot skips its executor tests unless `SKIP_INTEGRATION=0` is set. We labeled with it set, so those tests can fail.
 - `requirements.lock` is every package in the environment we labeled in, on the image the `Dockerfile` starts from. To run sqlglot's tests the way we did, `pip install -r requirements.lock` and put the sqlglot checkout on `PYTHONPATH`; sqlglot's own `pip install -e .[dev]` picks newer versions.
-- The scorer is linux/amd64. On an Apple Silicon Mac, build and run with `--platform linux/amd64`, as the Makefile does, or your timings and wheels will differ.
+- See the [workspace setup](WORKSPACE.md#get-both-teammates-running-the-same-setup) before building the scorer image locally.
 - A change that only adds a comment is not promised to be harmless.

@@ -8,41 +8,38 @@ failure, and the selector's own CPU time. Lower is better.
 
 ## Get both teammates running the same setup
 
-1. Use a Linux x86-64 Devin environment scoped to this repository. Use the
-   same environment for both teammates. Docker must be running and accessible
-   to your user; the host also needs GNU Make and Python 3.9 or newer.
-   A local machine with those tools works too: the Makefile targets
-   `linux/amd64` explicitly for judge-compatible runs, even on an ARM host.
-   Use `make e2e-dev` for a faster native-architecture local loop instead.
+1. Use the repository's Devin environment, or set up a local machine that
+   meets the [build requirements](AGENTS.md#hard-rules). Docker must be
+   running and accessible to your user; the host also needs GNU Make and
+   Python 3.9 or newer.
 2. Clone the repository into a path without spaces. In the repo root, run
    `docker version` (check for both Client and Server), `make --version`,
    and `python3 --version`, then run `make e2e`.
-3. Start changes on separate branches. Include the sample score and miss
-   count in each pull request. Use `make check` for output validation, not
-   as a substitute for checking the miss count.
+3. Start changes on separate branches. See the [PR evidence rules](AGENTS.md#evidence-for-prs)
+   before running a comparison.
 
 ## Commands
 
 | Command | Runs | Output |
 | --- | --- | --- |
-| `make e2e` (alias `make sample`) | Selector and scheduler in the image, under the scorer's limits, then the sample scorer | `out/e2e.jsonl` |
+| `make build` | Builds the Docker image, including the selector map | `blast-radius-entry` image (override with `IMAGE`) |
+| `make e2e` (alias `make sample`) | Selector and scheduler in the pinned linux/amd64 image, under the scorer's limits, then the sample scorer | `out/e2e.jsonl` |
 | `make e2e-amd64` | Alias of `make e2e`, explicitly naming the judge's linux/amd64 architecture | `out/e2e.jsonl` |
 | `make e2e-dev` | Same limits and scorer, native architecture with a separate `blast-radius-entry-dev` image and unpinned Python base | `out/e2e-dev.jsonl` |
 | `make check` | Same run, format check only | `out/e2e.jsonl` |
 | `make select` | Selector only, in the image | `out/picks.jsonl`, one `{"commit", "selected"}` line a patch |
 | `make schedule` | Scheduler only, on the host, over `out/picks.jsonl`, then the sample scorer | `out/schedule-saved.jsonl` |
 | `make schedule SOURCE=ideal` | Scheduler only, over the sample's known failing tests | `out/schedule-ideal.jsonl` |
-| `make test` | Unit tests, on the host | |
+| `make test` | Unit tests on the host ([collector test requirements](AGENTS.md#evaluation-and-runtime)) | |
 
 Container stderr is printed to the terminal and saved to `out/e2e.log`,
 `out/e2e-dev.log`, `out/check.log`, or `out/select.log`, respectively.
 
-Run `make select` once, then `make schedule` after each scheduler change: the
-selection stays fixed, so score differences come from scheduling alone.
-`SOURCE=ideal` reads `sample/answers.json` on the host, never in the image; it
-shows the best score a scheduler could reach with a perfect selector. The same
-modes run directly as `python3 main.py [--data DIR] [select | schedule
---picks FILE | schedule --ideal FILE]`.
+To replay picks in separate checkouts, run `make select` once and copy its
+`out/picks.jsonl` to the other checkout's `out/` before running `make schedule`
+in each. `SOURCE=ideal` shows what the scheduler would score if given exactly
+the known failing tests. The same modes run directly as
+`python3 main.py [--data DIR] [select | schedule --picks FILE | schedule --ideal FILE]`.
 
 ## Selection and scheduling interface
 
@@ -64,23 +61,18 @@ modes run directly as `python3 main.py [--data DIR] [select | schedule
   empty workers. `LptScheduler` uses at most `config.workers` workers.
 - The container entrypoint, `main.py`, selects and schedules tests for each
   patch, caching identical consecutive selections, and writes one
-  `{"commit": "...", "workers": [...]}` JSON line. Keep selection
-  fixed when measuring scheduling changes and vice versa.
+  `{"commit": "...", "workers": [...]}` JSON line.
 
-## Reference result
+## Reference results
 
-The interface split preserves the official starter's behavior: run
-all 1,620 tests on three workers.
-On the 30 public patches, `make sample` reports **1,210.470 simulated
-seconds, zero misses**. The local sample scorer does not measure container
-CPU; do not compare this score directly with the published leaderboard
-baseline, which is not the local sample score.
+On the 30 public patches with three workers:
 
-Treat `sample/answers.json` as scorer-only data. The sample runner mounts
-only the patches and the test list, and the Docker build excludes the
-sample directory. Keep the [scorer restrictions](SCORING.md) in place:
-no network at runtime, a read-only filesystem, and the unprivileged
-`nobody` user.
+| Selector | Simulated seconds | Misses |
+| --- | ---: | ---: |
+| All tests (default; `make sample`) | 1,210.470 | 0 |
+| [MapSelector](#run-the-map-selector) ([reference run](https://github.com/hackathon-don/rwx-blast-radius/pull/10)) | 851.9 | 0 |
+
+The local sample scorer does not measure container CPU.
 
 The official starter files are from the
 [track download](https://www.joinbuilders.org/buildathon/tracks/blast-radius/files/blast-radius-sample.tar.gz).
@@ -123,10 +115,24 @@ base-image acquisition, SQLGlot source download, dependency installation, or
 final image assembly; those steps add to a clean Docker build's total time.
 Build logs report the full catalog partition (passed, baseline failures,
 incomplete, and missing); missing/incomplete tests are always selected. The
-final image has no tests or answers mounted at runtime.
+runtime gets only the patches and test catalog from the host.
 
-Opt in explicitly; `DEFAULT_CONFIG` remains all-tests:
+### Run the map selector
+
+From the repository root, build the image and run the opt-in selector with
+the same mounts and constraints as `make e2e`:
 
 ```sh
-python3 -c 'from config import Config; from main import main; from strategies.selectors.map_only import MapSelector; main(Config(selector_cls=MapSelector))'
+make build IMAGE=blast-radius-entry
+mkdir -p out
+docker run --rm --platform linux/amd64 --network none --cpus 2 \
+  --memory 4096m --memory-swap 4096m --pids-limit 256 --read-only \
+  --tmpfs /tmp:rw,size=64m,mode=1777 --cap-drop ALL \
+  --security-opt no-new-privileges --user 65534:65534 --env HOME=/tmp \
+  --volume "$PWD/sample/commits:/data/commits:ro" \
+  --volume "$PWD/sample/tests.json:/data/tests.json:ro" \
+  --workdir /app blast-radius-entry \
+  python -c 'from config import Config; from main import main; from strategies.selectors.map_only import MapSelector; main(Config(selector_cls=MapSelector))' \
+  > out/e2e-map.jsonl &&
+python3 score.py sample sample/answers.json out/e2e-map.jsonl
 ```
