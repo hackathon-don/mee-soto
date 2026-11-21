@@ -1,4 +1,4 @@
-"""Baseline experiment configuration."""
+"""Selector and scheduler experiment configuration."""
 
 from dataclasses import dataclass
 from pathlib import Path

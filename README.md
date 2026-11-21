@@ -1,9 +1,12 @@
-# Blast Radius starter
+# Blast Radius selector
 
 A working submission for the Blast Radius track. The default runs every test
-on every commit. The opt-in `MapSelector` uses a build-generated file map only,
-does not execute tests at runtime, and falls back to all tests for unknown
-changes.
+on every commit. Two selectors are opt-in. `MapSelector` uses a build-generated
+file map only, does not execute tests at runtime, and falls back to all tests
+for unknown changes. `ImpactSelector` narrows candidates with committed
+line-coverage maps and an AST diff, then runs the cheap ones against the
+patched tree inside the container and keeps the ones that fail. See
+[WORKSPACE.md](WORKSPACE.md) for how to choose one.
 
 ## The problem
 
@@ -51,8 +54,9 @@ from the pinned SQLGlot tests and this catalog. The all-tests selector remains
 the default. Each catalog test runs in its own build-time child process; the
 collector records executed Python files and audited file/directory reads. A
 failed, timed-out, incomplete, or unstarted test is always selected at runtime.
-The generated map is not committed, and the final image contains neither the
-SQLGlot source nor pytest. The collector applies a 360-second budget to test
+The generated map is not committed. The final image keeps the pinned
+dependencies and SQLGlot source because `ImpactSelector` runs tests against
+them; `MapSelector` does not use them. The collector applies a 360-second budget to test
 collection; fetching source and installing `requirements.lock` are separate
 Docker build steps outside that budget. Inspect the build's passed,
 baseline-failure, incomplete, and missing counts before relying on its coverage.

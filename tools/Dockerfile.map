@@ -1,0 +1,4 @@
+# Native-arch image for building coverage maps offline (not the submission image).
+FROM python:3.13-slim
+COPY requirements.lock /tmp/requirements.lock
+RUN pip install --no-cache-dir -r /tmp/requirements.lock
