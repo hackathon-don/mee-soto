@@ -495,7 +495,10 @@ def analyze_commit(ctx: Context, cid: str, text: str) -> Analysis:
     plan = Plan(cid)
     imp = ctx.an.analyze(parse_patch(text))
     plan.notes.extend(imp.notes)
-    cand = [n for n in bits(imp.candidates) if n in ms]
+    candidate_mask = imp.candidates
+    for importers in imp.import_fail_masks.values():
+        candidate_mask |= importers
+    cand = [n for n in bits(candidate_mask) if n in ms]
     must = [n for n in bits(imp.must_fail) if n in ms]
     commit_never, commit_cpu = never, cpu
     tp = ix.pseudo.get("tpcds")
