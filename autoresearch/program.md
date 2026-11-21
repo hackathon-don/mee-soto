@@ -309,3 +309,9 @@ seconds, and the commit subject.
     SQL and exact conditional DuckDB query transcripts. Preserve the
     original child-link check and serialization. Require a source proof
     for shared setup and conditional execution before any test removal.
+
+29. **Capture the actual optimizer worker inputs.** Observe the unmodified
+    fixture's spawned compiler calls and exact primitive invocation state.
+    Compare fixture metadata and actual captured call arguments to find
+    where the cheaper replay becomes incomplete. Record no pass/fail or
+    expected-output data. Require a complete input/state trace first.
