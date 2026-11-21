@@ -48,7 +48,12 @@ def parse_patch(text: str) -> list[FilePatch]:
     i = 0
     while i < len(lines):
         line = lines[i]
-        if line.startswith("--- ") and i + 1 < len(lines) and lines[i + 1].startswith("+++ "):
+        file_header = line.startswith("--- ") and i + 1 < len(lines) and lines[i + 1].startswith("+++ ")
+        if file_header and hunk is not None:
+            old_seen = sum(l[0] in (" ", "-") for l in hunk.lines)
+            new_seen = sum(l[0] in (" ", "+") for l in hunk.lines)
+            file_header = old_seen >= hunk.old_len and new_seen >= hunk.new_len
+        if file_header:
             current = FilePatch(_strip_prefix(line[4:]), _strip_prefix(lines[i + 1][4:]))
             patches.append(current)
             hunk = None
