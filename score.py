@@ -307,8 +307,9 @@ def _run_report(arguments: list[str]) -> int:
     )
     print(f"estimated total:   {_format_microseconds(total_microseconds):>13} s")
     print(
-        "The leaderboard measures CPU on its own amd64 host. Compare strategies on the "
-        "simulated total; the estimated total is only a rough guide, not the judge's number."
+        "Note: selector CPU time is measured on this machine and is not the judge's number. "
+        "The leaderboard measures it on its own amd64 host. Compare strategies on the "
+        "simulated total, and use the estimated total only as a rough guide."
     )
     architecture = platform.machine()
     if architecture.lower() not in {"amd64", "x86_64"}:
