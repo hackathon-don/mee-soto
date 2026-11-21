@@ -105,7 +105,7 @@ def apply_patch(old_text: str, fp: FilePatch) -> str:
     Hunks are applied at their stated positions; context is verified loosely,
     falling back to a nearby search if the stated position does not match.
     """
-    old_lines = old_text.split("\n")
+    old_lines = old_text.split("\n") if old_text else []
     trailing_newline = old_text.endswith("\n")
     if trailing_newline:
         old_lines = old_lines[:-1]
