@@ -270,3 +270,9 @@ seconds, and the commit subject.
     disjoint complete fixture unit only if its incremental saving on the
     actual remaining schedule exceeds its bounded verification cost.
     Abstain when case interactions are unknown.
+
+23. **Measure numeric escape observer coverage before any pruning.** Use local
+    CPython monitoring events at verified lookup sites in a whole baseline
+    fixture unit. Separate actual key operands from unknown callers and
+    phase gaps. Price the resulting upper bound with the fixed scheduler.
+    Require an audited complete observer closure before any selection change.
