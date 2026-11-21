@@ -62,3 +62,29 @@ New idea = new class in its own file + new `EXPERIMENTS` entry; don't edit exist
    sides. Do not regenerate picks between runs.
 3. Limit claims to what the run measured. Public sample results do not
    establish hidden-patch performance or leaderboard scores.
+
+## Reporting scores
+
+Whenever you report a score, use this format. PRs do not need to include it,
+and it does not change what `make e2e` prints.
+
+```
+Experiment: "map"
+Score: 852.1 s (median)
+
+| Run      | Simulated | CPU    | Missed | Total     |
+|----------|-----------|--------|--------|-----------|
+| 1 of 3   | 851.94 s  | 0.12 s | 0      | 852.06 s  |
+| 2 of 3   | 851.94 s  | 0.11 s | 0      | 852.05 s  |
+| 3 of 3   | 851.94 s  | 0.12 s | 0      | 852.06 s  |
+| baseline | 1210.47 s | 0.07 s | 0      | 1210.54 s |
+
+Machine: linux/amd64
+Commit hash: <40 character hash>
+```
+
+- Run the experiment three times. Total is simulated plus CPU seconds;
+  the score is the median of the three totals, to one decimal.
+- Add a `baseline` row measured the same way for comparison.
+- Give the full 40-character commit hash, or `Commit hash: NOT COMMITED`
+  for uncommitted work.

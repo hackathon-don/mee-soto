@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, autoresearch]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  sample:
+    name: Sample scoring and tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    outputs:
+      report: ${{ steps.score.outputs.report }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        id: python
+        with:
+          python-version: "3.13"
+
+      - name: Run unit tests
+        run: |
+          python3 -m pip install -c requirements.lock pytest
+          make test
+
+      - name: Recover the base after a force-push
+        id: force-base
+        if: ${{ !cancelled() && github.event_name == 'push' && github.event.forced }}
+        env:
+          BEFORE: ${{ github.event.before }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          if git cat-file -e "${BEFORE}^{commit}"; then
+            exit 0
+          fi
+          auth=$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)
+          if GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.${GITHUB_SERVER_URL}/.extraheader" \
+              GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" git fetch --no-tags origin "$BEFORE"; then
+            exit 0
+          fi
+          echo "::warning::The previous tip is unavailable; using a reachable comparison base."
+          if [[ "$GITHUB_REF_NAME" == main ]]; then
+            base=$(git rev-parse HEAD^)
+          else
+            base=$(git merge-base HEAD origin/main)
+          fi
+          echo "sha=$base" >> "$GITHUB_OUTPUT"
+
+      - name: Score the public sample
+        id: score
+        if: ${{ !cancelled() && steps.python.outcome == 'success' }}
+        env:
+          BASE_SHA: ${{ steps.force-base.outputs.sha || github.event.before }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            BASE_SHA=$(git rev-parse HEAD^1)
+          fi
+          status=0
+          python3 tools/ci_score.py "$BASE_SHA" | tee -a "$GITHUB_STEP_SUMMARY" || status=$?
+          {
+            echo 'report<<RWX_SCORE_REPORT'
+            cat "$GITHUB_STEP_SUMMARY"
+            echo 'RWX_SCORE_REPORT'
+          } >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+  comment:
+    name: Update PR score comment
+    needs: sample
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    concurrency:
+      group: score-comment-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          SCORE_REPORT: ${{ needs.sample.outputs.report }}
+        with:
+          script: |
+            const issue_number = context.issue.number;
+            const pr = await github.rest.pulls.get({...context.repo, pull_number: issue_number});
+            if (pr.data.state !== 'open' || pr.data.head.sha !== context.payload.pull_request.head.sha) {
+              return;
+            }
+
+            const marker = '<!-- rwx-ci-score -->';
+            const run = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            const score = process.env.SCORE_REPORT || 'No sample score was produced for this run.';
+            const body = `${marker}\n${score}\n\n[GitHub Actions run](${run})`;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              ...context.repo, issue_number
+            });
+            const previous = comments.find(comment =>
+              comment.user?.login === 'github-actions[bot]' && comment.body?.startsWith(marker)
+            );
+            if (previous) {
+              await github.rest.issues.updateComment({...context.repo, comment_id: previous.id, body});
+            } else {
+              await github.rest.issues.createComment({...context.repo, issue_number, body});
+            }
