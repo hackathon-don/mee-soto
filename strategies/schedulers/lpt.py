@@ -1,4 +1,7 @@
-"""Assign the longest remaining test to the lightest worker."""
+"""Assign the longest remaining test to the lightest worker.
+
+LPT stands for Longest Processing Time (first), a greedy load-balancing heuristic.
+"""
 
 from __future__ import annotations
 
