@@ -3,4 +3,7 @@
 **/__pycache__/
 .pytest_cache/
 sample/
+tools/
+tests/
+out/
 output.jsonl

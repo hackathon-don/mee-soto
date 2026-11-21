@@ -1,6 +1,11 @@
-# Blast Radius starter
+# Blast Radius selector
 
-A working submission for the Blast Radius track. It runs every test on every commit, so it never misses a failure and scores badly. Your job is to run less without missing.
+A submission for the Blast Radius track using coverage-mapped impact analysis
+and patched-tree verification. The default `ImpactSelector` narrows candidates
+with AST, import, and fixture maps, then chooses which candidates to verify
+and which to include unrun. The final scheduler remains three-worker LPT.
+`AllTestsSelector` is available as a baseline through `Config`. See
+[WORKSPACE.md](WORKSPACE.md) for the strategy interfaces and selector settings.
 
 ## The problem
 
@@ -50,6 +55,16 @@ Push to a public GitHub repository with the `Dockerfile` at its top, then enter 
 - Only the final counts. The practice board carries no prize.
 
 ## How your image runs
+
+The Dockerfile installs the pinned dependencies, downloads only the pinned
+SQLGlot revision, precompiles it, and builds a static name index from
+the committed coverage maps in `strategies/selectors/impact/maps/`. Runtime
+verification uses forked children and patched overlays under `/tmp`.
+`tools/`, `tests/`, `sample/`, and `out/` are excluded from the build context;
+only patches and the test catalog are mounted at runtime. Sample answers are
+scorer-only data and are never selector input. Offline map and tuning tools
+are in `tools/`; `python3 tools/simulate.py --help` describes the simulator's
+inputs (use Python 3.10+ for the impact analysis tools, Python 3.13 in the image).
 
 - The build has the network, 4 cores, 8 GB of memory and 10 minutes. It may clone sqlglot at the pinned commit, install it and run its tests to make coverage or import maps.
 - Your repository may hold 20 MB. Git submodules and Git LFS files are not fetched: clone sqlglot in the `Dockerfile` and commit maps as plain files.

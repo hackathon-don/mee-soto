@@ -24,12 +24,13 @@ failure, and the selector's own CPU time. Lower is better.
 
 - `config.py` defines the frozen experiment `Config`: selector and scheduler
   classes, worker count (default 3), and data directory (default `/data`).
-  `DEFAULT_CONFIG` uses `AllTestsSelector` and `LptScheduler`.
+  `DEFAULT_CONFIG` uses `ImpactSelector` and `LptScheduler`.
 - `strategies/selectors/` defines `Selector`, `CatalogTest`, and the `Patch`
   record (commit id and diff text). A selector is constructed once with
   `(catalog, config)`. Its `select(commits)` method processes the batch and
   returns a mapping from commit id to unique catalog test numbers.
-  `AllTestsSelector` currently selects every test for every commit.
+  `ImpactSelector` uses coverage-mapped impact analysis and patched-tree
+  verification. `AllTestsSelector` remains available as the all-tests baseline.
 - `strategies/schedulers/` defines `Scheduler`, constructed once with
   `(durations, config)`. Its `schedule(selected)` method returns worker lists
   containing each selected number exactly once, or `[]` for no tests, dropping
@@ -41,12 +42,35 @@ failure, and the selector's own CPU time. Lower is better.
 
 ## Reference result
 
-The interface split preserves the official starter's behavior: run
-all 1,620 tests on three workers.
-On the 30 public patches, `make sample` reports **1,210.470 simulated
-seconds, zero misses**. The local sample scorer does not measure container
+Using `Config(selector_cls=AllTestsSelector)` preserves the official starter's
+behavior: run all 1,620 tests on three workers.
+The recorded all-tests reference on the 30 public patches is **1,210.470
+simulated seconds, zero misses**. The local sample scorer does not measure container
 CPU; do not compare this score directly with the published leaderboard
 baseline, which is not the local sample score.
+
+## Impact selector and image
+
+`strategies/selectors/impact/` ports Don's PR #5 at
+`d8e4a935eb4261fa6dd32080b0614afbb3fc8b45`. The committed maps under its
+`maps/` directory were built from the pinned SQLGlot revision. The image
+installs `requirements.lock`, fetches that revision into `/opt/sg`, builds
+`maps/static.pkl.gz`, and precompiles Python modules. Offline tools live in
+`tools/`; tools, tests, sample data, and experiment output are excluded from
+the Docker build context.
+
+`ImpactSelector` starts its wall budget at construction, before loading its
+index. It falls back to every catalog test if index loading or patch analysis
+raises an error. The original environment-variable knobs (`BR_SG`, `BR_MAPS`,
+`BR_WORK`, `BR_WALL_BUDGET`, and the other `BR_*` tuning settings) remain in
+the impact implementation, not `Config`. `BR_MAPS` contains `index.pkl.gz`,
+`cpu.json`, and the build-generated `static.pkl.gz`.
+
+The selector's internal `pack.py` estimates verification costs using Don's
+unchanged 1–8-worker model. It does not replace the final `LptScheduler`, which
+still uses `config.workers` (three by default). Thresholds and heavy-test
+deferral are unchanged; public sample results do not guarantee zero misses
+on hidden patches.
 
 Treat `sample/answers.json` as scorer-only data. The sample runner mounts
 only the patches and the test list, and the Docker build excludes the
