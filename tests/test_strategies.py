@@ -71,6 +71,14 @@ class StrategyTest(unittest.TestCase):
             LptScheduler({}, DEFAULT_CONFIG).schedule([99])
 
 
+class ConfigTest(unittest.TestCase):
+    def test_rejects_worker_counts_outside_scorer_limit(self) -> None:
+        for workers in (0, -1, 9):
+            with self.subTest(workers=workers), self.assertRaises(ValueError):
+                Config(workers=workers)
+        self.assertEqual(Config(workers=8).workers, 8)
+
+
 class EntrypointTest(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
