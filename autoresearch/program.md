@@ -239,3 +239,9 @@ seconds, and the commit subject.
     independently verified execution of a deferred test only when the fixed
     schedule savings cover the measured CPU and setup estimate. Keep it on
     timeout, partial verification, or failed lifecycle checks.
+
+17. **Preserve individual proofs in a cohort with skips.** Where the whole
+    cohort has clean collection and no failures, remove only individually
+    identified tests with passed setup, body, and teardown. Keep skipped and
+    unsupported members and retain the whole cohort on a failure, unexpected
+    report, timeout, or insufficient schedule improvement.
