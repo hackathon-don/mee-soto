@@ -328,3 +328,10 @@ seconds, and the commit subject.
     nested Plans. A future proof may allow disjoint ready branches and
     order-insensitive merges. Keep any case with mutable shared state,
     unproved merge order, or incomplete subquery observations.
+
+32. **Audit actual decoder inputs and opaque observers before import.**
+    Trace the complete pinned dialect module and its lifecycle in ordinary
+    pytest. Separate known lookup sites from other direct registry loads,
+    dynamic reflection, subprocess paths, and unobserved uses. The absence
+    of an observed affected key is useful only with explicit observer
+    completeness and stable composition.
