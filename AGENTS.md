@@ -17,6 +17,8 @@ the upstream SQLGlot checkout do not apply here.
 
 ## Task routing
 
+New idea = new class in its own file + new `EXPERIMENTS` entry; don't edit existing strategies or the baseline entry/`DEFAULT_CONFIG` for a trial. See [Try a new strategy](WORKSPACE.md#try-a-new-strategy).
+
 ### Selection
 
 - Start in [strategies/selectors/](strategies/selectors/) and [config.py](config.py).
@@ -24,8 +26,8 @@ the upstream SQLGlot checkout do not apply here.
   and [Dockerfile](Dockerfile).
 - Run `make select` to inspect picks and `make e2e` to check misses. Keep the
   scheduler and worker count fixed when evaluating a selector change.
-- The Python invocation in the [MapSelector recipe](WORKSPACE.md#run-the-map-selector)
-  works only inside the built image. Check the collector's result counts
+- The [MapSelector recipe](WORKSPACE.md#run-the-map-selector) runs inside
+  the built image. Check the collector's result counts
   before trusting a new map.
 
 ### Scheduling

@@ -1,9 +1,9 @@
 """Select and schedule tests for each patch, or run either stage on its own.
 
-    main.py [--data DIR]                          select, schedule and emit worker JSONL
-    main.py [--data DIR] select                   emit {"commit", "selected"} JSONL only
-    main.py [--data DIR] schedule --picks FILE    schedule saved selections
-    main.py [--data DIR] schedule --ideal FILE    schedule a sample answers.json's failing tests
+    main.py [--experiment NAME] [--data DIR] [select | schedule --picks FILE | schedule --ideal FILE]
+
+With no subcommand, select, schedule and emit worker JSONL. Select emits
+{"commit", "selected"} JSONL; schedule replays saved picks or known failures.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from collections.abc import Sequence
 from functools import lru_cache
 from pathlib import Path
 
-from config import DEFAULT_CONFIG, Config
+from config import DEFAULT_CONFIG, EXPERIMENTS, Config
 from strategies.schedulers import Scheduler
 from strategies.selectors import CatalogTest, Patch
 
@@ -25,6 +25,7 @@ Selections = list[tuple[str, list[int]]]
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Select and schedule tests for each patch.")
+    parser.add_argument("--experiment", choices=EXPERIMENTS, default=None, help="named configuration")
     parser.add_argument("--data", type=Path, help="directory with commits/ and tests.json")
     modes = parser.add_subparsers(dest="mode")
     modes.add_parser("select", help="emit selected test numbers without scheduling")
@@ -71,6 +72,8 @@ def write_schedule(selections: Selections, scheduler: Scheduler) -> None:
 
 def main(config: Config = DEFAULT_CONFIG, argv: Sequence[str] = ()) -> None:
     args = parse_args(argv)
+    if args.experiment is not None:
+        config = EXPERIMENTS[args.experiment]
     if args.data is not None:
         config = dataclasses.replace(config, data_dir=args.data)
     data = Path(config.data_dir)

@@ -7,6 +7,7 @@ from strategies.schedulers import Scheduler
 from strategies.schedulers.lpt import LptScheduler
 from strategies.selectors import Selector
 from strategies.selectors.all_tests import AllTestsSelector
+from strategies.selectors.map_only import MapSelector
 
 MAX_WORKERS = 8
 
@@ -23,4 +24,9 @@ class Config:
             raise ValueError(f"workers must be between 1 and {MAX_WORKERS}, got {self.workers}")
 
 
-DEFAULT_CONFIG = Config()
+EXPERIMENTS: dict[str, Config] = {
+    "baseline": Config(),
+    "map": Config(selector_cls=MapSelector),
+}
+
+DEFAULT_CONFIG = EXPERIMENTS["baseline"]
