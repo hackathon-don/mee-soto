@@ -10,6 +10,7 @@ from strategies.selectors.all_tests import AllTestsSelector
 from strategies.selectors.impact import ImpactSelector
 from strategies.selectors.impact_fresh_copy import FreshTableCopyImpact
 from strategies.selectors.impact_individual_proof import IndividualProofImpact
+from strategies.selectors.impact_optimizer_transcript import OptimizerTranscriptImpact
 from strategies.selectors.map_narrow import NarrowMapSelector
 from strategies.selectors.map_only import MapSelector
 
@@ -35,6 +36,7 @@ EXPERIMENTS: dict[str, Config] = {
     "impact": Config(selector_cls=ImpactSelector),
     "impact-individual-pass": Config(selector_cls=IndividualProofImpact),
     "impact-fresh-table-copy": Config(selector_cls=FreshTableCopyImpact),
+    "impact-full-optimizer-proof": Config(selector_cls=OptimizerTranscriptImpact),
 }
 
 DEFAULT_CONFIG = EXPERIMENTS["baseline"]
