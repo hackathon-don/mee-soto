@@ -2,6 +2,7 @@ SHELL := /bin/bash
 .SHELLFLAGS := -o pipefail -c
 
 IMAGE ?= blast-radius-entry
+EXPERIMENT ?= baseline
 DEV_IMAGE ?= $(IMAGE)-dev
 NATIVE_PLATFORM = linux/$(shell docker version -f '{{.Server.Arch}}')
 SAMPLE := $(CURDIR)/sample
@@ -28,14 +29,14 @@ build:
 # scores what it printed.
 e2e: build
 	@mkdir -p $(OUT)
-	docker run --platform linux/amd64 $(RUN_FLAGS) $(IMAGE) 2>&1 > $(OUT)/e2e.jsonl | tee $(OUT)/e2e.log >&2
+	docker run --platform linux/amd64 $(RUN_FLAGS) $(IMAGE) python /app/main.py --experiment $(EXPERIMENT) 2>&1 > $(OUT)/e2e.jsonl | tee $(OUT)/e2e.log >&2
 	python3 score.py $(SAMPLE) $(SAMPLE)/answers.json $(OUT)/e2e.jsonl
 
 # Builds and scores a native-arch image under the same scorer limits.
 e2e-dev:
 	docker build --platform $(NATIVE_PLATFORM) --build-arg BASE=python:3.13-slim --tag $(DEV_IMAGE) .
 	@mkdir -p $(OUT)
-	docker run --platform $(NATIVE_PLATFORM) $(RUN_FLAGS) $(DEV_IMAGE) 2>&1 > $(OUT)/e2e-dev.jsonl | tee $(OUT)/e2e-dev.log >&2
+	docker run --platform $(NATIVE_PLATFORM) $(RUN_FLAGS) $(DEV_IMAGE) python /app/main.py --experiment $(EXPERIMENT) 2>&1 > $(OUT)/e2e-dev.jsonl | tee $(OUT)/e2e-dev.log >&2
 	python3 score.py $(SAMPLE) $(SAMPLE)/answers.json $(OUT)/e2e-dev.jsonl
 
 # Explicit alias for the judge-compatible amd64 run.
@@ -49,14 +50,14 @@ sample:
 # A wrong selection still passes here; make e2e counts the misses.
 check: build
 	@mkdir -p $(OUT)
-	docker run --platform linux/amd64 $(RUN_FLAGS) $(IMAGE) 2>&1 > $(OUT)/e2e.jsonl | tee $(OUT)/check.log >&2
+	docker run --platform linux/amd64 $(RUN_FLAGS) $(IMAGE) python /app/main.py --experiment $(EXPERIMENT) 2>&1 > $(OUT)/e2e.jsonl | tee $(OUT)/check.log >&2
 	python3 score.py $(SAMPLE) $(SAMPLE)/answers.json $(OUT)/e2e.jsonl > /dev/null && echo "format ok"
 
 # Runs only the selector, in the image under the scorer's limits, and saves
 # its picks for make schedule.
 select: build
 	@mkdir -p $(OUT)
-	docker run --platform linux/amd64 $(RUN_FLAGS) $(IMAGE) python /app/main.py select 2>&1 > $(OUT)/picks.jsonl.tmp | tee $(OUT)/select.log >&2
+	docker run --platform linux/amd64 $(RUN_FLAGS) $(IMAGE) python /app/main.py --experiment $(EXPERIMENT) select 2>&1 > $(OUT)/picks.jsonl.tmp | tee $(OUT)/select.log >&2
 	mv $(OUT)/picks.jsonl.tmp $(OUT)/picks.jsonl
 
 # Runs only the scheduler, on the host, over fixed selections, and scores it.
@@ -67,7 +68,7 @@ schedule:
 		ideal) set -- --ideal $(SAMPLE)/answers.json ;; \
 		*) echo "SOURCE must be saved or ideal" >&2; exit 2 ;; \
 	esac; \
-	python3 main.py --data $(SAMPLE) schedule "$$@" > $(OUT)/schedule-$(SOURCE).jsonl.tmp
+	python3 main.py --experiment $(EXPERIMENT) --data $(SAMPLE) schedule "$$@" > $(OUT)/schedule-$(SOURCE).jsonl.tmp
 	mv $(OUT)/schedule-$(SOURCE).jsonl.tmp $(OUT)/schedule-$(SOURCE).jsonl
 	python3 score.py $(SAMPLE) $(SAMPLE)/answers.json $(OUT)/schedule-$(SOURCE).jsonl
 

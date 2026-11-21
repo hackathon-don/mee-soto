@@ -34,24 +34,29 @@ failure, and the selector's own CPU time. Lower is better.
 
 Container stderr is printed to the terminal and saved to `out/e2e.log`,
 `out/e2e-dev.log`, `out/check.log`, or `out/select.log`, respectively.
+Run targets use `EXPERIMENT=baseline` by default; override it with a name
+from `config.py`'s `EXPERIMENTS`.
 
 To replay picks in separate checkouts, run `make select` once and copy its
 `out/picks.jsonl` to the other checkout's `out/` before running `make schedule`
 in each. `SOURCE=ideal` shows what the scheduler would score if given exactly
 the known failing tests. The same modes run directly as
-`python3 main.py [--data DIR] [select | schedule --picks FILE | schedule --ideal FILE]`.
+`python3 main.py [--experiment NAME] [--data DIR] [select | schedule --picks FILE | schedule --ideal FILE]`.
 
 ## Selection and scheduling interface
 
 - `config.py` defines the frozen experiment `Config`: selector and scheduler
   classes, worker count (default 3), and data directory (default `/data`).
-  `DEFAULT_CONFIG` uses `AllTestsSelector` and `LptScheduler`.
+  `EXPERIMENTS` holds named configs; `DEFAULT_CONFIG` is the baseline entry,
+  using `AllTestsSelector` and `LptScheduler`. No flag preserves the supplied
+  config (or `DEFAULT_CONFIG`); `--experiment` replaces it, then `--data`
+  overrides its data directory. The judge runs the image without flags.
 - `strategies/selectors/` defines `Selector`, `CatalogTest`, and the `Patch`
   record (commit id and diff text). A selector is constructed once with
   `(catalog, config)`. Its `select(commits)` method processes the batch and
   returns a mapping from commit id to unique catalog test numbers.
   `AllTestsSelector` currently selects every test for every commit.
-- `MapSelector` is opt-in via `Config(selector_cls=MapSelector)`. It reads a
+- `MapSelector` is opt-in via the `map` experiment. It reads a
   precomputed file-to-test map only; it does not import the patched source,
   collect tests, launch subprocesses, or probe imports. Unknown, empty,
   malformed, quoted, binary, or unsupported changes select all tests.
@@ -65,37 +70,31 @@ the known failing tests. The same modes run directly as
 
 ## Try a new strategy
 
-Each idea is a new class, not an edit to an existing one, so `main` keeps
-running the default and every idea can be compared against it.
+Keep each idea separate so it can be compared against the unchanged baseline.
 
 1. Add the class in its own file, such as
    `strategies/schedulers/my_scheduler.py`, following the
    [interface](#selection-and-scheduling-interface).
-2. Run it by passing the class to `Config`. No command-line flag or `make`
-   variable switches strategies: `main.py` and every `make` target run
-   `DEFAULT_CONFIG`, so call `main` from `python3 -c` instead.
-3. Change `DEFAULT_CONFIG` in `config.py` only in the PR that makes the
-   new class the submission, with the comparison as evidence.
+2. Import it in `config.py` and add an `EXPERIMENTS` entry holding a `Config`,
+   e.g. `"my": Config(scheduler_cls=MyScheduler)`. Keep the other stage and
+   worker count fixed. Don't edit existing strategies or the baseline for a trial.
+3. Benchmark as below. Promote the winner to the baseline/default only in
+   the PR that makes it the submission, with the comparison as evidence.
+
+For selectors, compare `make e2e` with `make e2e EXPERIMENT=<name>`.
+These targets rebuild the image after code changes and use the same run limits.
 
 To compare schedulers, select once and replay the same picks on the host,
 which needs no image rebuild:
 
 ```sh
 make select                # once; writes out/picks.jsonl
-make schedule              # baseline LptScheduler on those picks
-python3 -c 'import sys; from config import Config; from main import main; from strategies.schedulers.my_scheduler import MyScheduler; main(Config(scheduler_cls=MyScheduler), sys.argv[1:])' \
-  --data sample schedule --picks out/picks.jsonl > out/schedule-my.jsonl &&
-python3 score.py sample sample/answers.json out/schedule-my.jsonl
+make schedule              # baseline on those picks
+make schedule EXPERIMENT=my # new scheduler on the same picks; no rebuild
 ```
 
-Use `--ideal sample/answers.json` in place of `--picks out/picks.jsonl` to
-compare on the known failing tests.
-
-To compare selectors, run `make e2e` for the baseline, then the
-[map selector recipe](#run-the-map-selector) with its `python -c` line
-naming your class, for example
-`main(Config(selector_cls=MySelector))`. Selectors run in the image, so
-rebuild after each change.
+Use `SOURCE=ideal` on both schedule runs to compare on the known failing tests.
+Save output files before the next run if you need to retain both schedules.
 
 ## Reference results
 
@@ -113,8 +112,7 @@ The official starter files are from the
 
 ## Map-only selector
 
-`MapSelector` is opt-in; `Config()` still selects all tests. The Docker
-builder runs `tools/build_file_map.py` against SQLGlot
+The Docker builder runs `tools/build_file_map.py` against SQLGlot
 `tobymao/sqlglot@eb11aec4be8cb2122afe713a4816662c3f0fb2fa` and
 `sample/tests.json`. It starts one Python 3.13 child per catalog test, enables
 `sys.monitoring.PY_START` before importing pytest, and audits file opens and
@@ -153,20 +151,8 @@ runtime gets only the patches and test catalog from the host.
 
 ### Run the map selector
 
-From the repository root, build the image and run the opt-in selector with
-the same mounts and constraints as `make e2e`:
+From the repository root, build and score with the standard mounts and limits:
 
 ```sh
-make build IMAGE=blast-radius-entry
-mkdir -p out
-docker run --rm --platform linux/amd64 --network none --cpus 2 \
-  --memory 4096m --memory-swap 4096m --pids-limit 256 --read-only \
-  --tmpfs /tmp:rw,size=64m,mode=1777 --cap-drop ALL \
-  --security-opt no-new-privileges --user 65534:65534 --env HOME=/tmp \
-  --volume "$PWD/sample/commits:/data/commits:ro" \
-  --volume "$PWD/sample/tests.json:/data/tests.json:ro" \
-  --workdir /app blast-radius-entry \
-  python -c 'from config import Config; from main import main; from strategies.selectors.map_only import MapSelector; main(Config(selector_cls=MapSelector))' \
-  > out/e2e-map.jsonl &&
-python3 score.py sample sample/answers.json out/e2e-map.jsonl
+make e2e EXPERIMENT=map
 ```
