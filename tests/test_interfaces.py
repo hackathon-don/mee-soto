@@ -6,6 +6,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import call, patch
 
+import main
 import selector
 from scheduler import schedule
 
@@ -40,12 +41,12 @@ class InterfaceTests(unittest.TestCase):
             (data / "tests.json").write_text(json.dumps({"tests": CATALOG}))
 
             with (
-                patch.object(selector, "DATA", data),
+                patch.object(main, "DATA", data),
                 patch.object(selector, "select", side_effect=[[1], []]) as select,
                 redirect_stdout(io.StringIO()) as stdout,
                 redirect_stderr(io.StringIO()),
             ):
-                selector.main()
+                main.main()
 
         self.assertEqual(select.call_args_list, [call(first_diff, CATALOG), call(second_diff, CATALOG)])
         self.assertEqual(

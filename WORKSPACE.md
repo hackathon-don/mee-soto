@@ -29,8 +29,8 @@ failure, and the selector's own CPU time. Lower is better.
   and a mapping from test number to recorded seconds. It returns worker lists
   containing each selected number exactly once, or `[]` for no tests.
   Scheduling changes belong here.
-- The container entrypoint selects and schedules tests for each patch and
-  writes one `{"commit": "...", "workers": [...]}` JSON line. Keep selection
+- The container entrypoint, `main.py`, selects and schedules tests for each
+  patch and writes one `{"commit": "...", "workers": [...]}` JSON line. Keep selection
   fixed when measuring scheduling changes and vice versa.
 
 ## Reference result
