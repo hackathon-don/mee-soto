@@ -20,7 +20,7 @@ RUN_FLAGS := --rm --network none --cpus 2 \
 	--volume $(SAMPLE)/commits:/data/commits:ro \
 	--volume $(SAMPLE)/tests.json:/data/tests.json:ro
 
-.PHONY: build e2e e2e-dev e2e-amd64 check select schedule test sample
+.PHONY: build e2e e2e-dev e2e-amd64 check select schedule test sample autoresearch autoresearch-validate
 
 build:
 	docker build --platform linux/amd64 --tag $(IMAGE) .
@@ -74,3 +74,12 @@ schedule:
 
 test:
 	python3 -m unittest discover -s tests
+
+# One autoresearch iteration on the search split: keeps HEAD or resets to the
+# last kept commit. See autoresearch/program.md.
+autoresearch:
+	python3 autoresearch/run.py loop --experiment $(EXPERIMENT)
+
+# Scores an experiment on the held-out validation split. Humans only.
+autoresearch-validate:
+	python3 autoresearch/run.py validate --experiment $(EXPERIMENT)

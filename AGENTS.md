@@ -19,6 +19,11 @@ the upstream SQLGlot checkout do not apply here.
 
 New idea = new class in its own file + new `EXPERIMENTS` entry; don't edit existing strategies or the baseline entry/`DEFAULT_CONFIG` for a trial. See [Try a new strategy](WORKSPACE.md#try-a-new-strategy).
 
+### Autoresearch
+
+- When asked to run the autoresearch loop, follow
+  [autoresearch/program.md](autoresearch/program.md) and do not edit it.
+
 ### Selection
 
 - Start in [strategies/selectors/](strategies/selectors/) and [config.py](config.py).

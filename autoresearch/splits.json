@@ -1,0 +1,5 @@
+{
+  "rule": "Stratified by answer kind; within each kind, commits sorted by sha256(commit id) and every third one goes to validation.",
+  "search": ["2haz", "2jrq", "2vdj", "3utz", "4d63", "6vvp", "6ze8", "8y7j", "986c", "9u5k", "ary6", "bap8", "bj7g", "egys", "fryt", "gbhk", "j6uz", "ktz3", "nwnx", "rszg", "st8f"],
+  "validation": ["2qn5", "535z", "5y72", "66ks", "bvw2", "f4bn", "f4xa", "gbav", "mthh"]
+}
