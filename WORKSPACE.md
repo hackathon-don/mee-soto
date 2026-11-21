@@ -23,7 +23,7 @@ failure, and the selector's own CPU time. Lower is better.
 | Command | Runs | Output |
 | --- | --- | --- |
 | `make build` | Builds the Docker image, including the selector map | `blast-radius-entry` image (override with `IMAGE`) |
-| `make e2e` (alias `make sample`) | Selector and scheduler in the pinned linux/amd64 image, under the scorer's limits, then the sample scorer | `out/e2e.jsonl` |
+| `make e2e` | Selector and scheduler in the pinned linux/amd64 image, under the scorer's limits, then the sample scorer | `out/e2e.jsonl` |
 | `make e2e-amd64` | Alias of `make e2e`, explicitly naming the judge's linux/amd64 architecture | `out/e2e.jsonl` |
 | `make e2e-dev` | Same limits and scorer, native architecture with a separate `blast-radius-entry-dev` image and unpinned Python base | `out/e2e-dev.jsonl` |
 | `make check` | Same run, format check only | `out/e2e.jsonl` |
@@ -69,7 +69,7 @@ On the 30 public patches with three workers:
 
 | Selector | Simulated seconds | Misses |
 | --- | ---: | ---: |
-| All tests (default; `make sample`) | 1,210.470 | 0 |
+| All tests (default; `make e2e`) | 1,210.470 | 0 |
 | [MapSelector](#run-the-map-selector) ([reference run](https://github.com/hackathon-don/rwx-blast-radius/pull/10)) | 851.9 | 0 |
 
 The local sample scorer does not measure container CPU.
