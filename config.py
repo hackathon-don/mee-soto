@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from strategies.schedulers import Scheduler
+from strategies.schedulers.exact_packing import ExactPackingScheduler
 from strategies.schedulers.lpt import LptScheduler
 from strategies.schedulers.variable_workers import VariableWorkerScheduler
 from strategies.selectors import Selector
@@ -49,6 +50,9 @@ EXPERIMENTS: dict[str, Config] = {
     ),
     "impact-first-failure": Config(
         selector_cls=FirstFailureImpact, scheduler_cls=VariableWorkerScheduler
+    ),
+    "impact-first-failure-exact-packing": Config(
+        selector_cls=FirstFailureImpact, scheduler_cls=ExactPackingScheduler
     ),
 }
 
