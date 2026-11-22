@@ -352,9 +352,9 @@ seconds, and the commit subject.
 
 ### Recorder-gated map ideas
 
-These four untested ideas are not from the competitor list. Start none until
-the persistent recorder covers the full suite within the 10-minute build
-limit on four cores. Then take them in the order below.
+These ideas are not from the competitor list. Start neither allowed idea
+until the recorder covers the full suite and the committed map fits the
+track's 20 MB repository cap. Take the allowed ideas in the order below.
 Keep rule: Linux total improves, 0 misses, no added selector CPU.
 
 35. **Condition operand map.** Extend the outcome recorder from `is` and `==`
@@ -373,17 +373,12 @@ Keep rule: Linux total improves, 0 misses, no added selector CPU.
     audit miss risk from globals, mutable arguments, side effects, and
     call order. Use the full check when the replay boundary is not proved.
 
-37. **Co-failure order map.** Learn from build-time mutants which existing
-    checks are likely to fail first, and use that signal only to order
-    `FirstFailureImpact` checks. The cutoff already exists; coverage-based
-    ordering was dropped (134.0 s versus 132.9 s). Do not retry that ranking
-    or add a skip rule. Preserve fixture boundaries, the existing stop and
-    fallback behavior, and the scheduler.
+37. **Co-failure order map — not allowed as queued.** Do not store per-patch
+    or per-edit-kind mutant failure rankings, even for ordering only. A
+    separate idea could use one patch-independent per-test priority for
+    `FirstFailureImpact`, with no new skip rule. Coverage-based ordering
+    was already dropped (134.0 s versus 132.9 s).
 
-38. **Mutant answer table.** Estimate the build cost of applying common
-    small edits and storing which tests fail for each; do not build the table
-    until the cost is known. Reuse the edit generation and full-suite labeling
-    machinery behind `holdout_mutants.py`, not the held-out evaluation
-    labels. That pipeline already labels mutants offline; the proposed
-    build-time lookup is new. An edit without an exact match falls back to
-    normal selection.
+38. **Mutant answer table — not allowed by the track rules.** Do not build
+    this lookup. The [track rules](https://www.joinbuilders.org/buildathon/tracks/blast-radius)
+    say: “no table from a patch, or from a kind of edit, to the tests it breaks”.
