@@ -1,0 +1,12 @@
+diff --git a/sqlglot/parsers/presto.py b/sqlglot/parsers/presto.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/presto.py
++++ b/sqlglot/parsers/presto.py
+@@ -151,6 +151,7 @@
+         "LEVENSHTEIN_DISTANCE": exp.Levenshtein.from_arg_list,
+         "NOW": exp.CurrentTimestamp.from_arg_list,
+         "REGEXP_EXTRACT": build_regexp_extract(exp.RegexpExtract),
++        # Order matters here
+         "REGEXP_EXTRACT_ALL": build_regexp_extract(exp.RegexpExtractAll),
+         "REGEXP_REPLACE": lambda args: exp.RegexpReplace(
+             this=seq_get(args, 0),

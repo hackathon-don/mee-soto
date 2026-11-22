@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/canonicalize_internal_names.py b/sqlglot/optimizer/canonicalize_internal_names.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/canonicalize_internal_names.py
++++ b/sqlglot/optimizer/canonicalize_internal_names.py
+@@ -296,7 +296,7 @@
+         # and UBN splits them into disjoint output columns, dropping data. Align
+         # the right branch's canonicals to the left's. No-op when both branches
+         # preserved their aliases (top-level UBN).
+-        if isinstance(scope_expr, exp.SetOperation) and scope_expr.args.get("by_name"):
++        if isinstance(scope_expr, exp.SetOperation) or scope_expr.args.get("by_name"):
+             left_scope, right_scope = scope.set_operation_scopes
+             left_out = scope_outputs.get(id(left_scope.expression), {})
+             right_out = scope_outputs.get(id(right_scope.expression), {})

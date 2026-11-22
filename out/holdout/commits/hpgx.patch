@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/scope.py b/sqlglot/optimizer/scope.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/scope.py
++++ b/sqlglot/optimizer/scope.py
+@@ -428,7 +428,7 @@
+                             or column.name not in named_selects
+                         )
+                     )
+-                    or (isinstance(ancestor, exp.Star) and not column.arg_key == "except_")
++                    and (isinstance(ancestor, exp.Star) and not column.arg_key == "except_")
+                 ):
+                     self._columns.append(column)
+ 

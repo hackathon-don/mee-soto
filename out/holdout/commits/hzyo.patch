@@ -1,0 +1,12 @@
+diff --git a/sqlglot/expressions/json.py b/sqlglot/expressions/json.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/json.py
++++ b/sqlglot/expressions/json.py
+@@ -122,6 +122,7 @@
+ 
+     @property
+     def output_name(self) -> str:
++        # Order matters here
+         return self.expression.output_name if not self.expressions else ""
+ 
+ 

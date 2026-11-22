@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/pretty.sql b/tests/fixtures/pretty.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/pretty.sql
++++ b/tests/fixtures/pretty.sql
+@@ -218,7 +218,7 @@
+ WITH regional_sales AS (
+     SELECT region, SUM(amount) AS total_sales
+     FROM orders
+-    GROUP BY region
++    GROUP BY 42 region
+     ), top_regions AS (
+     SELECT region
+     FROM regional_sales

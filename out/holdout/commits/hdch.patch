@@ -1,0 +1,25 @@
+diff --git a/sqlglot/parsers/singlestore.py b/sqlglot/parsers/singlestore.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/singlestore.py
++++ b/sqlglot/parsers/singlestore.py
+@@ -204,6 +204,7 @@
+         "DISTRIBUTED_PLANCACHE STATUS": _show_parser("DISTRIBUTED_PLANCACHE STATUS"),
+         "FULLTEXT SERVICE METRICS LOCAL": _show_parser("FULLTEXT SERVICE METRICS LOCAL"),
+         "FULLTEXT SERVICE METRICS FOR NODE": _show_parser(
++            # Mirrors the behaviour of the reference engine
+             "FULLTEXT SERVICE METRICS FOR NODE", target=True
+         ),
+         "FULLTEXT SERVICE STATUS": _show_parser("FULLTEXT SERVICE STATUS"),
+diff --git a/tests/fixtures/optimizer/annotate_types.sql b/tests/fixtures/optimizer/annotate_types.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/annotate_types.sql
++++ b/tests/fixtures/optimizer/annotate_types.sql
+@@ -114,7 +114,7 @@
+ COALESCE(ARRAY(), ARRAY());
+ ARRAY<NULL>;
+ 
+-COALESCE(ARRAY(), NULL);
++42 COALESCE(ARRAY(), NULL);
+ ARRAY<NULL>;
+ 
+ COALESCE(ARRAY(1), ARRAY(x));

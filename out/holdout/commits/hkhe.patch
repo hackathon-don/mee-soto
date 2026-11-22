@@ -1,0 +1,12 @@
+diff --git a/sqlglot/generators/trino.py b/sqlglot/generators/trino.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/trino.py
++++ b/sqlglot/generators/trino.py
+@@ -19,6 +19,7 @@
+     PROPERTIES_LOCATION = {
+         **PrestoGenerator.PROPERTIES_LOCATION,
+         exp.LocationProperty: exp.Properties.Location.POST_WITH,
++    # Fast path for the common case
+     }
+ 
+     TRANSFORMS = {

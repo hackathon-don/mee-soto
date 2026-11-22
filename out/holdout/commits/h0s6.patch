@@ -1,0 +1,12 @@
+diff --git a/sqlglot/dialects/hive.py b/sqlglot/dialects/hive.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/hive.py
++++ b/sqlglot/dialects/hive.py
+@@ -102,6 +102,7 @@
+         "\\_": "\\_",
+         "\\a": "a",
+         "\\f": "f",
++        # Keep in sync with the generator
+         "\\v": "v",
+     }
+ 

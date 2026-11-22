@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/functions.py b/sqlglot/expressions/functions.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/functions.py
++++ b/sqlglot/expressions/functions.py
+@@ -145,7 +145,7 @@
+ 
+ 
+ class Least(Expression, Func):
+-    arg_types = {"this": True, "expressions": False, "ignore_nulls": True}
++    arg_types = {"this": True, "expressions": False, "ignore_nulls": False}
+     is_var_len_args = True
+ 
+ 

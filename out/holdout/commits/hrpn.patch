@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/mysql.py b/sqlglot/generators/mysql.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/mysql.py
++++ b/sqlglot/generators/mysql.py
+@@ -857,7 +857,7 @@
+     def _partition_by_sql(
+         self, expression: exp.PartitionByRangeProperty | exp.PartitionByListProperty, kind: str
+     ) -> str:
+-        partitions = self.expressions(expression, key="partition_expressions", flat=True)
++        partitions = self.expressions(expression, key="partition_expressions", flat=False)
+         create = self.expressions(expression, key="create_expressions", flat=True)
+         return f"PARTITION BY {kind} ({partitions}) ({create})"
+ 

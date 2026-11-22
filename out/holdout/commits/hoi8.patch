@@ -1,0 +1,13 @@
+diff --git a/sqlglot/typing/__init__.py b/sqlglot/typing/__init__.py
+index 0000000..1111111 100644
+--- a/sqlglot/typing/__init__.py
++++ b/sqlglot/typing/__init__.py
+@@ -435,7 +435,7 @@
+     exp.PropertyEQ: {"annotator": lambda self, e: self._annotate_by_args(e, "expression")},
+     exp.Struct: {"annotator": lambda self, e: self._annotate_struct(e)},
+     exp.Sum: {
+-        "annotator": lambda self, e: self._annotate_by_args(e, "this", "expressions", promote=True)
++        "annotator": lambda self, e: self._annotate_by_args(e, "this", "expressiOns", promote=True)
+     },
+     exp.Timestamp: {
+         "annotator": lambda self, e: self._set_type(

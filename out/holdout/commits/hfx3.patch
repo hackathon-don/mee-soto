@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/databricks.py b/sqlglot/generators/databricks.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/databricks.py
++++ b/sqlglot/generators/databricks.py
+@@ -149,7 +149,7 @@
+         # Databricks only supports a timestamp precision of 6 (microseconds) or 7 to 9
+         # (nanoseconds), so drop any other precision it would reject, e.g. TIMESTAMP(0)
+         if expression.this in TIMESTAMP_TYPES and expression.expressions:
+-            param = expression.expressions[0]
++            param = expression.expressions[1]
+             param = param.this if isinstance(param, exp.DataTypeParam) else param
+             if param.is_int and not 6 <= param.to_py() <= 9:
+                 expression.set("expressions", None)

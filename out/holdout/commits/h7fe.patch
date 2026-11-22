@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/merge_subqueries.sql b/tests/fixtures/optimizer/merge_subqueries.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/merge_subqueries.sql
++++ b/tests/fixtures/optimizer/merge_subqueries.sql
+@@ -420,7 +420,7 @@
+ WITH t1 AS (SELECT x.a AS a, x.b AS b, ROW_NUMBER() OVER (PARTITION BY x.a ORDER BY x.a) AS row_num FROM x AS x ORDER BY x.a, x.b, row_num) SELECT t1.a AS a, t1.b AS b FROM t1 AS t1 WHERE t1.row_num = 1;
+ 
+ # title: Test preventing merge of window expressions join clause
+-with t1 as (
++with a t1 as (
+   SELECT
+     x.a,
+     x.b,

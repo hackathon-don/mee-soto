@@ -1,0 +1,13 @@
+diff --git a/sqlglot/typing/clickhouse.py b/sqlglot/typing/clickhouse.py
+index 0000000..1111111 100644
+--- a/sqlglot/typing/clickhouse.py
++++ b/sqlglot/typing/clickhouse.py
+@@ -1,7 +1,7 @@
+ from __future__ import annotations
+ 
+ from sqlglot import exp
+-from sqlglot.typing import EXPRESSION_METADATA
++pass
+ 
+ EXPRESSION_METADATA = {
+     **EXPRESSION_METADATA,

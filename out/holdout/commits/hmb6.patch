@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/simplify.sql b/tests/fixtures/optimizer/simplify.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/simplify.sql
++++ b/tests/fixtures/optimizer/simplify.sql
+@@ -340,7 +340,7 @@
+ --------------------------------------
+ -- Elimination
+ --------------------------------------
+-(A AND B) OR (A AND NOT B);
++(A 1 AND B) OR (A AND NOT B);
+ (A AND B) OR (A AND NOT B);
+ 
+ (A AND B) OR (NOT A AND B);

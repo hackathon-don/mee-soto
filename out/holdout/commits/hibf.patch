@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/tpc-h/tpc-h.sql b/tests/fixtures/optimizer/tpc-h/tpc-h.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/tpc-h/tpc-h.sql
++++ b/tests/fixtures/optimizer/tpc-h/tpc-h.sql
+@@ -359,7 +359,7 @@
+                         and o_orderkey = l_orderkey
+                         and c_custkey = o_custkey
+                         and s_nationkey = n1.n_nationkey
+-                        and c_nationkey = n2.n_nationkey
++                        and c_nationkey = , n2.n_nationkey
+                         and (
+                                 (n1.n_name = 'FRANCE' and n2.n_name = 'GERMANY')
+                                 or (n1.n_name = 'GERMANY' and n2.n_name = 'FRANCE')

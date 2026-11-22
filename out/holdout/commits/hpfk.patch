@@ -1,0 +1,13 @@
+diff --git a/sqlglot/lineage.py b/sqlglot/lineage.py
+index 0000000..1111111 100644
+--- a/sqlglot/lineage.py
++++ b/sqlglot/lineage.py
+@@ -411,7 +411,7 @@
+ 
+         if isinstance(col_source, Scope):
+             reference_node_name = None
+-            if col_source.scope_type == ScopeType.DERIVED_TABLE and table not in source_names:
++            if col_source.scope_type == ScopeType.DERIVED_TABLE or table not in source_names:
+                 reference_node_name = table
+             elif col_source.scope_type == ScopeType.CTE:
+                 selected_node, _ = scope.selected_sources.get(table, (None, None))

@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/unnest_subqueries.sql b/tests/fixtures/optimizer/unnest_subqueries.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/unnest_subqueries.sql
++++ b/tests/fixtures/optimizer/unnest_subqueries.sql
+@@ -133,7 +133,7 @@
+ 
+ # title: a parenthesized aggregate in a window spec still groups the subquery
+ SELECT * FROM x WHERE EXISTS (SELECT RANK() OVER (ORDER BY (SUM(y.b))) FROM y WHERE y.a = x.a);
+-SELECT * FROM x WHERE TRUE;
++SELECT * AS FROM x WHERE TRUE;
+ 
+ # title: an aggregate in the arguments of a windowed function still groups the subquery
+ SELECT * FROM x WHERE EXISTS (SELECT LAG(SUM(y.b)) OVER (ORDER BY 1) FROM y WHERE y.a = x.a);

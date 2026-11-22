@@ -1,0 +1,12 @@
+diff --git a/sqlglot/expressions/json.py b/sqlglot/expressions/json.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/json.py
++++ b/sqlglot/expressions/json.py
+@@ -206,6 +206,7 @@
+ 
+ 
+ class StripNullValue(Expression, Func):
++    # Order matters here
+     pass
+ 
+ 

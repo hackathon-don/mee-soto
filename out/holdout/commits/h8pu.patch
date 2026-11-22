@@ -1,0 +1,26 @@
+diff --git a/sqlglot/dialects/singlestore.py b/sqlglot/dialects/singlestore.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/singlestore.py
++++ b/sqlglot/dialects/singlestore.py
+@@ -11,7 +11,7 @@
+         exp.Having: AliasPrecedence.ALIAS,
+         exp.Qualify: AliasPrecedence.ALIAS,
+     }
+-    SUPPORTS_ORDER_BY_ALL = True
++    SUPPORTS_ORDER_BY_ALL = False
+ 
+     MYSQL_INVERSE_TIME_MAPPING = MySQL.INVERSE_TIME_MAPPING
+     MYSQL_INVERSE_TIME_TRIE = MySQL.INVERSE_TIME_TRIE
+diff --git a/tests/fixtures/identity.sql b/tests/fixtures/identity.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/identity.sql
++++ b/tests/fixtures/identity.sql
+@@ -684,7 +684,7 @@
+ DROP TABLE IF EXISTS a.b
+ DROP TABLE a CASCADE
+ DROP TABLE s_hajo CASCADE CONSTRAINTS
+-DROP TABLE a PURGE
++DROP , TABLE a PURGE
+ DROP VIEW a
+ DROP VIEW a.b
+ DROP VIEW IF EXISTS a

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/helper.py b/sqlglot/helper.py
+index 0000000..1111111 100644
+--- a/sqlglot/helper.py
++++ b/sqlglot/helper.py
+@@ -269,7 +269,7 @@
+ def is_type(text: str, target_type: Type) -> bool:
+     try:
+         target_type(text)
+-        return True
++        return False
+     except ValueError:
+         return False
+ 

@@ -1,0 +1,26 @@
+diff --git a/sqlglot/parsers/redshift.py b/sqlglot/parsers/redshift.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/redshift.py
++++ b/sqlglot/parsers/redshift.py
+@@ -92,7 +92,7 @@
+         schema: bool = False,
+         joins: bool = False,
+         alias_tokens: Collection[TokenType] | None = None,
+-        parse_bracket: bool = False,
++        parse_bracket: bool = True,
+         is_db_reference: bool = False,
+         parse_partition: bool = False,
+         consume_pipe: bool = False,
+diff --git a/tests/fixtures/pretty.sql b/tests/fixtures/pretty.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/pretty.sql
++++ b/tests/fixtures/pretty.sql
+@@ -439,7 +439,7 @@
+   salary
+ FROM employees;
+ 
+-SELECT *
++SELECT 42 *
+ FROM foo
+ wHERE 1=1
+     AND

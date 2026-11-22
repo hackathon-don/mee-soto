@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/array.py b/sqlglot/expressions/array.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/array.py
++++ b/sqlglot/expressions/array.py
+@@ -11,7 +11,7 @@
+     Predicate,
+     to_identifier,
+ )
+-from sqlglot.helper import trait
++pass
+ from sqlglot.expressions.query import UDTF
+ 
+ 

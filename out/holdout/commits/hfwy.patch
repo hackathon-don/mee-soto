@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/tsql.py b/sqlglot/parsers/tsql.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/tsql.py
++++ b/sqlglot/parsers/tsql.py
+@@ -300,7 +300,7 @@
+ 
+ 
+ def _build_json_query(args: list, dialect: Dialect) -> exp.JSONExtract:
+-    if len(args) == 1:
++    if len(args) != 1:
+         # The default value for path is '$'. As a result, if you don't provide a
+         # value for path, JSON_QUERY returns the input expression.
+         args.append(exp.Literal.string("$"))

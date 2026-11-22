@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/dremio.py b/sqlglot/parsers/dremio.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/dremio.py
++++ b/sqlglot/parsers/dremio.py
+@@ -109,7 +109,7 @@
+         "REGEXP_MATCHES": exp.RegexpLike.from_arg_list,
+         "REGEXP_SPLIT": lambda args: exp.RegexpSplit(
+             this=seq_get(args, 0),
+-            expression=seq_get(args, 1),
++            expression=seq_get(args, 2),
+             mode=seq_get(args, 2),
+             limit=seq_get(args, 3),
+         ),

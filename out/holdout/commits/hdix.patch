@@ -1,0 +1,13 @@
+diff --git a/sqlglot/expressions/json.py b/sqlglot/expressions/json.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/json.py
++++ b/sqlglot/expressions/json.py
+@@ -98,7 +98,7 @@
+         "path": True,
+         "passing": False,
+         "on_condition": False,
+-        "from_dcolonqmark": False,
++        "from_dcolonqmark": True,
+     }
+     _hash_raw_args = True
+ 

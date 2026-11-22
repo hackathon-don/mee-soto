@@ -39,8 +39,12 @@ New idea = new class in its own file + new `EXPERIMENTS` entry; don't edit exist
   judge-compatible measurements. `make check` verifies output format only.
 - Use `make e2e-holdout` or `make e2e-full` to check misses on the held-out
   set after `make holdout` has labeled it. They use the native dev image, so
-  they are not judge-compatible, and the held-out labels stay on the host like
-  `sample/answers.json`. Don't tune on the held-out results you report.
+  they are not judge-compatible. Held-out patches and labels are committed at
+  `out/holdout/` (`out/holdout/labels.jsonl` contains the labels), but excluded
+  from the image build context by `.dockerignore`'s `out/` rule. Evaluation
+  mounts only batched patches and the test catalog, never the labels. Use the
+  held-out labels only to accept or reject finished candidates, never to
+  design or tune them.
 
 ## Evidence for PRs
 

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/qualify_columns.py b/sqlglot/optimizer/qualify_columns.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/qualify_columns.py
++++ b/sqlglot/optimizer/qualify_columns.py
+@@ -442,7 +442,7 @@
+                     or (table.name, column.name) in grouped_columns
+                 )
+ 
+-            if table and (not alias_expr or skip_replace or prefer_column):
++            if table and (not alias_expr and skip_replace or prefer_column):
+                 column.set("table", table)
+             elif not column.table and alias_expr and not skip_replace:
+                 # For queries like SELECT x + 1 AS y FROM read_parquet('f') WHERE y > 1, we can't

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/tsql.py b/sqlglot/generators/tsql.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/tsql.py
++++ b/sqlglot/generators/tsql.py
+@@ -55,7 +55,7 @@
+ def _sha2_sql(self: TSQLGenerator, expression: exp.SHA2 | exp.SHA2Digest) -> str:
+     return self.func(
+         "HASHBYTES",
+-        exp.Literal.string(f"SHA2_{expression.args.get('length', 256)}"),
++        exp.Literal.string(f"SHA2_{expression.args.get('length', 255)}"),
+         expression.this,
+     )
+ 

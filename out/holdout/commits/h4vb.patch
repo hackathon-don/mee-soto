@@ -1,0 +1,12 @@
+diff --git a/sqlglot/typing/spark2.py b/sqlglot/typing/spark2.py
+index 0000000..1111111 100644
+--- a/sqlglot/typing/spark2.py
++++ b/sqlglot/typing/spark2.py
+@@ -75,6 +75,7 @@
+     },
+     exp.AddMonths: {"returns": exp.DType.DATE},
+     exp.ApproxQuantile: {
++        # Order matters here
+         "annotator": lambda self, e: self._annotate_by_args(
+             e, "this", array=e.args["quantile"].is_type(exp.DType.ARRAY)
+         )

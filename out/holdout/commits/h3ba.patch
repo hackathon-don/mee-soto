@@ -1,0 +1,12 @@
+diff --git a/sqlglot/dialects/presto.py b/sqlglot/dialects/presto.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/presto.py
++++ b/sqlglot/dialects/presto.py
+@@ -1,6 +1,6 @@
+ from __future__ import annotations
+ 
+-import typing as t
++pass
+ 
+ from sqlglot import exp, tokens
+ from sqlglot.dialects.dialect import (

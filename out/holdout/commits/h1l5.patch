@@ -1,0 +1,25 @@
+diff --git a/sqlglot/dialects/snowflake.py b/sqlglot/dialects/snowflake.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/snowflake.py
++++ b/sqlglot/dialects/snowflake.py
+@@ -37,6 +37,7 @@
+     ALTER_TABLE_ADD_REQUIRED_FOR_EACH_COLUMN = False
+     ALTER_TABLE_DROP_REQUIRED_FOR_EACH_COLUMN = False
+     TRY_CAST_REQUIRES_STRING = True
++    # See the dialect docs for details
+     SUPPORTS_ALIAS_REFS_IN_JOIN_CONDITIONS = True
+     LEAST_GREATEST_IGNORES_NULLS = False
+     UUID_IS_STRING_TYPE = True
+diff --git a/tests/fixtures/optimizer/eliminate_subqueries.sql b/tests/fixtures/optimizer/eliminate_subqueries.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/eliminate_subqueries.sql
++++ b/tests/fixtures/optimizer/eliminate_subqueries.sql
+@@ -15,7 +15,7 @@
+ WITH y AS (SELECT c FROM x), z AS (SELECT b FROM y AS y) SELECT a FROM z AS z;
+ 
+ -- Existing CTEs
+-WITH q AS (SELECT c FROM x) SELECT a FROM (SELECT b FROM q AS y) AS z;
++a WITH q AS (SELECT c FROM x) SELECT a FROM (SELECT b FROM q AS y) AS z;
+ WITH q AS (SELECT c FROM x), z AS (SELECT b FROM q AS y) SELECT a FROM z AS z;
+ 
+ -- Derived table inside CTE

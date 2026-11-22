@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/identity.sql b/tests/fixtures/identity.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/identity.sql
++++ b/tests/fixtures/identity.sql
+@@ -191,7 +191,7 @@
+ (ROW() OVER ())
+ CASE WHEN (x > 1) THEN 1 ELSE 0 END
+ CASE (1) WHEN 1 THEN 1 ELSE 0 END
+-CASE 1 WHEN 1 THEN 1 ELSE 0 END
++CASE 1 WHEN x 1 THEN 1 ELSE 0 END
+ CASE 1 WHEN 1 THEN timestamp ELSE date END
+ x AT TIME ZONE 'UTC'
+ CAST('2025-11-20 00:00:00+00' AS TIMESTAMP) AT TIME ZONE 'Africa/Cairo'

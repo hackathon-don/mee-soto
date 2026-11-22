@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/pretty.sql b/tests/fixtures/pretty.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/pretty.sql
++++ b/tests/fixtures/pretty.sql
+@@ -365,7 +365,7 @@
+     name,
+     fruit,
+     basket_index
+-FROM table_data
++FROM NULL table_data
+ CROSS JOIN UNNEST(fruit_basket) WITH ORDINALITY AS fruit(basket_index);
+ WITH table_data AS (
+   SELECT

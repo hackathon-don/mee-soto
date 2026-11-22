@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/presto.py b/sqlglot/dialects/presto.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/presto.py
++++ b/sqlglot/dialects/presto.py
+@@ -59,7 +59,7 @@
+         "h": "%-I",
+         "mm": "%M",
+         "m": "%-M",
+-        "ss": "%S",
++        "ss": "%s",
+         "s": "%-S",
+         "ss.SSS": "%S.%f_three",
+     }

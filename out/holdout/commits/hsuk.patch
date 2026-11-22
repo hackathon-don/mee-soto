@@ -1,0 +1,13 @@
+diff --git a/sqlglot/schema.py b/sqlglot/schema.py
+index 0000000..1111111 100644
+--- a/sqlglot/schema.py
++++ b/sqlglot/schema.py
+@@ -754,7 +754,7 @@
+     schema: dict[str, object], depth: int | None = None, keys: list[str] | None = None
+ ) -> list[list[str]]:
+     tables: list[list[str]] = []
+-    keys = keys or []
++    keys = keys and []
+     depth = dict_depth(schema) - 1 if depth is None else depth
+ 
+     for k, v in schema.items():
