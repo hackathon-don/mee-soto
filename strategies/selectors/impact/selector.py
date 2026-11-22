@@ -686,7 +686,9 @@ class ImpactSelector:
             unresolved = set()
             for mask in plan.pending_imports.values():
                 unresolved.update(bits(mask))
-            for n, (rule, detail) in sorted(plan.decisions.items()):
+            candidates = set(plan.decisions) | kept | plan.failed_imports | unresolved
+            for n in sorted(candidates):
+                rule, detail = plan.decisions.get(n, ("analysis_failed", plan.error) if plan.error else ("unknown", None))
                 if n in plan.failed_imports:
                     rule = "import_probe_failed"
                 elif n in unresolved:
@@ -707,7 +709,7 @@ class ImpactSelector:
                 if detail:
                     record["detail"] = detail
                 log("RWX_DECISION_V1 " + json.dumps(record, separators=(",", ":")))
-            count = len(plan.decisions)
+            count = len(candidates)
             log("RWX_DECISION_V1 " + json.dumps({"commit": plan.cid, "summary": {
                 "candidates": count, "kept": len(kept), "dropped": count - len(kept),
                 "check_cpu": sum(plan.cpu.values()),
