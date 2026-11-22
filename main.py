@@ -19,7 +19,9 @@ from pathlib import Path
 
 from config import DEFAULT_CONFIG, EXPERIMENTS, Config
 from strategies.schedulers import Scheduler
+from strategies.schedulers.worker_slack_insurance import WorkerSlackInsuranceScheduler
 from strategies.selectors import CatalogTest, Patch
+from strategies.selectors.impact import ImpactSelector
 
 Selections = list[tuple[str, list[int]]]
 
@@ -68,7 +70,11 @@ def write_schedule(selections: Selections, scheduler: Scheduler) -> None:
         return scheduler.schedule(selected)
 
     for commit, selected in selections:
-        print(json.dumps({"commit": commit, "workers": schedule_selection(tuple(selected))}))
+        if isinstance(scheduler, WorkerSlackInsuranceScheduler):
+            workers = scheduler.schedule_for_commit(commit, selected)
+        else:
+            workers = schedule_selection(tuple(selected))
+        print(json.dumps({"commit": commit, "workers": workers}))
 
 
 def main(config: Config = DEFAULT_CONFIG, argv: Sequence[str] = ()) -> None:
@@ -103,6 +109,8 @@ def main(config: Config = DEFAULT_CONFIG, argv: Sequence[str] = ()) -> None:
         for commit, selected in selections:
             print(json.dumps({"commit": commit, "selected": selected}))
     else:
+        if isinstance(scheduler, WorkerSlackInsuranceScheduler) and isinstance(selector, ImpactSelector):
+            scheduler.impact_index = selector.ix
         write_schedule(selections, scheduler)
     total = sum(len(selected) for _, selected in selections)
     print(f"selected {total} tests across {len(patches)} commits", file=sys.stderr)

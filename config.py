@@ -7,6 +7,7 @@ from strategies.schedulers import Scheduler
 from strategies.schedulers.exact_packing import ExactPackingScheduler
 from strategies.schedulers.lpt import LptScheduler
 from strategies.schedulers.variable_workers import VariableWorkerScheduler
+from strategies.schedulers.worker_slack_insurance import WorkerSlackInsuranceScheduler
 from strategies.selectors import Selector
 from strategies.selectors.all_tests import AllTestsSelector
 from strategies.selectors.impact import ImpactSelector
@@ -52,6 +53,11 @@ EXPERIMENTS: dict[str, Config] = {
     "impact-first-failure-tables-free-cpu": Config(
         selector_cls=FirstFailureTablesFreeCpuImpact,
         scheduler_cls=VariableWorkerScheduler,
+        exit_after_output=True,
+    ),
+    "impact-first-failure-tables-free-cpu-insurance": Config(
+        selector_cls=FirstFailureTablesFreeCpuImpact,
+        scheduler_cls=WorkerSlackInsuranceScheduler,
         exit_after_output=True,
     ),
     "impact-first-failure-exact-packing": Config(
