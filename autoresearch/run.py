@@ -139,7 +139,7 @@ def run_experiment(experiment: str, data: Path) -> dict:
     out = WORK / f"run-{data.name}"
     out.mkdir(parents=True, exist_ok=True)
     result = subprocess.run(
-        ["make", "--no-print-directory", "e2e", f"EXPERIMENT={experiment}",
+        ["make", "--no-print-directory", "e2e", "NO_BUILD=", f"EXPERIMENT={experiment}",
          f"SAMPLE={data}", f"OUT={out}"],
         cwd=ROOT,
     )
