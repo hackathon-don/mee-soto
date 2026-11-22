@@ -4,10 +4,22 @@ import argparse
 import ast
 from dataclasses import dataclass
 from decimal import Decimal
+from functools import cache
+from pathlib import Path
 import re
 from statistics import median
 import subprocess
 import sys
+from tempfile import TemporaryDirectory
+
+if __package__:
+    from .ci_cpu_report import PatchCpu, parse_cpu, render_cpu
+    from .ci_selection_report import (FalseChecks, FalseScheduling, false_checks, false_scheduling,
+                                     read_workers, render_false_work, selection_errors)
+else:
+    from ci_cpu_report import PatchCpu, parse_cpu, render_cpu
+    from ci_selection_report import (FalseChecks, FalseScheduling, false_checks, false_scheduling,
+                                    read_workers, render_false_work, selection_errors)
 
 
 def experiment_names(revision: str) -> list[str]:
@@ -67,9 +79,9 @@ def parse_score(output: str) -> Score:
     )
 
 
-def score(experiment: str, *, log_score: bool = True) -> Score:
+def score(experiment: str, *, log_score: bool = True, options=()) -> Score:
     result = subprocess.run(
-        ["make", "e2e", f"EXPERIMENT={experiment}"], stdout=subprocess.PIPE, text=True
+        ["make", "e2e", f"EXPERIMENT={experiment}", *options], stdout=subprocess.PIPE, text=True
     )
     if log_score or result.returncode:
         sys.stderr.write(result.stdout)
@@ -78,6 +90,67 @@ def score(experiment: str, *, log_score: bool = True) -> Score:
         return parse_score(result.stdout)
     except ValueError as error:
         raise ValueError(f"{experiment}: {error}") from error
+
+
+@dataclass(frozen=True)
+class DiagnosticRun:
+    score: Score
+    cpu: dict[str, PatchCpu] | None
+    schedule: dict[str, set[int]] | None
+    checks: FalseChecks | None = None
+    scheduling: FalseScheduling | None = None
+
+
+ANSWERS = Path("sample/answers.json")
+
+
+@cache
+def ideal_workers(experiment: str) -> dict[str, list[list[int]]]:
+    """The experiment's scheduler replaying only the known failures, on the host."""
+    result = subprocess.run(
+        [sys.executable, "main.py", "--experiment", experiment, "--data", "sample",
+         "schedule", "--ideal", str(ANSWERS)],
+        stdout=subprocess.PIPE, text=True, check=True,
+    )
+    return read_workers(result.stdout)
+
+
+def score_with_schedule(experiment: str, *, cpu_diagnostics: bool = False) -> DiagnosticRun:
+    # Each run gets new paths; a missing diagnostic cannot reuse a previous run.
+    with TemporaryDirectory(prefix="rwx-ci-") as out:
+        options = (f"OUT={out}",) + (("CPU_DIAGNOSTICS=1",) if cpu_diagnostics else ())
+        score_row = score(experiment, options=options)
+        schedule = scheduling = None
+        try:
+            workers = read_workers((Path(out) / "e2e.jsonl").read_text(encoding="utf-8"))
+            schedule = {patch: {test for worker in rows for test in worker} for patch, rows in workers.items()}
+            scheduling = false_scheduling(workers, ideal_workers(experiment), ANSWERS, Path("sample/tests.json"))
+        except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError):
+            pass
+        cpu = checks = None
+        if cpu_diagnostics:
+            try:
+                cpu = parse_cpu((Path(out) / "e2e.log").read_text(encoding="utf-8"))
+                # Selectors that run no checks emit no diagnostics.
+                checks = false_checks(cpu, ANSWERS) if cpu else None
+            except (OSError, ValueError, KeyError, TypeError):
+                pass
+        return DiagnosticRun(score_row, cpu, schedule, checks, scheduling)
+
+
+def median_run(runs: list[DiagnosticRun]) -> DiagnosticRun:
+    return sorted(runs, key=lambda run: run.score.total)[len(runs) // 2]
+
+
+def print_selection_errors(run: DiagnosticRun) -> None:
+    try:
+        if run.schedule is None:
+            raise ValueError("no schedule")
+        print(selection_errors(run.schedule, ANSWERS))
+    except (OSError, ValueError, KeyError, TypeError):
+        print("#### Selection errors (median run)\n\nPublic-sample selection errors unavailable for the median-total run.")
+    print()
+    print(render_false_work(run.checks, run.scheduling))
 
 
 def print_experiment(experiment: str, runs: list[Score], baseline: Score) -> None:
@@ -99,8 +172,11 @@ def print_scoring_check(commit: str, passed: bool) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("base", help="Previous branch tip or PR base commit SHA")
+    parser.add_argument("--selection-errors", action="store_true", help="Report median-run selection errors for PR CI")
+    parser.add_argument("--cpu-report", type=Path, help="Write opt-in CPU diagnostics for PR CI")
+    args = parser.parse_args()
     try:
-        experiments = added_experiments(parser.parse_args().base)
+        experiments = added_experiments(args.base)
     except (ValueError, subprocess.CalledProcessError) as error:
         parser.error(str(error))
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
@@ -109,16 +185,33 @@ def main() -> None:
             score("map", log_score=False)
             print_scoring_check(commit, passed=True)
             return
-        results = {experiment: [score(experiment) for _ in range(3)] for experiment in experiments}
+        if args.selection_errors or args.cpu_report:
+            diagnostics = {
+                experiment: [score_with_schedule(experiment, cpu_diagnostics=bool(args.cpu_report))
+                             for _ in range(3)]
+                for experiment in experiments
+            }
+            results = {name: [run.score for run in runs] for name, runs in diagnostics.items()}
+        else:
+            diagnostics = {}
+            results = {experiment: [score(experiment) for _ in range(3)] for experiment in experiments}
         baseline = score("baseline")
     except (ValueError, subprocess.CalledProcessError) as error:
         if not experiments:
             print_scoring_check(commit, passed=False)
         parser.exit(1, f"{error}\n")
 
+    cpu_sections = ["## RWX selector CPU"]
     for experiment, runs in results.items():
         print_experiment(experiment, runs, baseline)
+        if experiment in diagnostics:
+            run = median_run(diagnostics[experiment])
+            print()
+            print_selection_errors(run)
+            cpu_sections.append(render_cpu(experiment, run.score.cpu, run.cpu, run.schedule))
         print()
+    if args.cpu_report:
+        args.cpu_report.write_text("\n\n".join(cpu_sections) + "\n", encoding="utf-8")
     print(f"Machine: linux/amd64  \nCommit hash: {commit}")
 
 

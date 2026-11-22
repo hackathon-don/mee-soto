@@ -52,7 +52,9 @@ the known failing tests. The same modes run directly as
   `EXPERIMENTS` holds named configs; `DEFAULT_CONFIG` is the baseline entry,
   using `AllTestsSelector` and `LptScheduler`. No flag preserves the supplied
   config (or `DEFAULT_CONFIG`); `--experiment` replaces it, then `--data`
-  overrides its data directory. The judge runs the image without flags.
+  overrides its data directory. The judge runs the image without flags, so the
+  `Dockerfile` `CMD` passes `--experiment impact-full-optimizer-proof`; the
+  Makefile targets override `CMD` and pass `EXPERIMENT` instead.
 - `strategies/selectors/` defines `Selector`, `CatalogTest`, and the `Patch`
   record (commit id and diff text). A selector is constructed once with
   `(catalog, config)`. Its `select(commits)` method processes the batch and
@@ -123,6 +125,45 @@ no judge-compatible reference run in this repository yet.
 
 The official starter files are from the
 [track download](https://www.joinbuilders.org/buildathon/tracks/blast-radius/files/blast-radius-sample.tar.gz).
+
+## PR selection errors
+
+The score comment reports selection errors for each experiment's median-total run.
+It uses the emitted worker schedule and public labels on the scoring host only; labels
+do not reach the selector container.
+
+## PR selector CPU
+
+The separate CPU comment uses the median-total run. It joins completed verifier
+timings to the final worker schedule; shared and incomplete work is not assigned
+to individual tests. A fixture-subset check is not a full test.
+
+For a local diagnostic run on native Linux amd64, use
+`make e2e EXPERIMENT=impact CPU_DIAGNOSTICS=1`. Detailed records go only
+to stderr and the timed CI run includes logging overhead. The default and judge
+entrypoints do not enable this instrumentation.
+
+## Benchmark release
+
+**Benchmark release** runs on every push to main and benchmarks every
+registered experiment three times at the pushed commit, without CPU
+diagnostics so logging overhead stays out of the ranked totals. One job builds
+the image, so every experiment uses the same file map. Each experiment
+runs in its own job on its own machine, and a report job combines their trials;
+an experiment whose job fails counts as failed runs. The workflow saves the human report and structured results as artifacts, even when nothing
+is released. The
+baseline is a reference; eligible candidates finish all three runs without a
+miss and are ranked by exact median simulated-plus-CPU time. An incomplete batch
+or no eligible candidate cannot release. A batch is incomplete when an experiment
+job failed in the latest attempt or the experiments were measured with different
+file maps.
+
+When the batch has an eligible winner, a separate job validates the saved
+result and attaches both reports to a release tagged at the measured commit.
+The release notes are the full report. A pull request that changes the workflow
+or its report tools runs the same benchmark and release validation as a dry run
+that stops before creating a tag or release. It does not change the default experiment or submit anything to the
+leaderboard.
 
 ## Impact selector
 

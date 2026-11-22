@@ -1,0 +1,217 @@
+name: Benchmark release
+
+on:
+  push:
+    branches: [main]
+  # Dry run of the benchmark and release handoff before changes to it merge.
+  pull_request:
+    paths:
+      - .github/workflows/benchmark-release.yml
+      - tools/benchmark_release.py
+      - tools/ci_cpu_report.py
+      - tools/ci_score.py
+      - tools/ci_selection_report.py
+
+permissions: {}
+
+jobs:
+  experiments:
+    if: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      names: ${{ steps.list.outputs.names }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.13"
+      - name: List registered experiments
+        id: list
+        run: |
+          set -euo pipefail
+          names="$(python3 tools/benchmark_release.py --expected-sha "$GITHUB_SHA" list)"
+          echo "names=$names" >> "$GITHUB_OUTPUT"
+
+  # Build once so every experiment runs the same image and file map; the map
+  # collector is time-limited, so separate builds can produce different maps.
+  image:
+    if: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      artifact: ${{ steps.save.outputs.artifact }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Build and save image
+        id: save
+        run: |
+          set -euo pipefail
+          make build
+          docker save blast-radius-entry | gzip -1 > "$RUNNER_TEMP/image.tar.gz"
+          echo "artifact=image-$GITHUB_SHA-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ steps.save.outputs.artifact }}
+          path: ${{ runner.temp }}/image.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  # One job per experiment: each gets its own machine, so trials never share CPU.
+  benchmark:
+    needs: [experiments, image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        experiment: ${{ fromJSON(needs.experiments.outputs.names) }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.13"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ needs.image.outputs.artifact }}
+          path: ${{ runner.temp }}/image
+      - name: Load image
+        run: gunzip -c "$RUNNER_TEMP/image/image.tar.gz" | docker load
+      - name: Measure ${{ matrix.experiment }}
+        env:
+          EXPERIMENT: ${{ matrix.experiment }}
+          NO_BUILD: "1"
+        run: |
+          set -euo pipefail
+          python3 tools/benchmark_release.py --expected-sha "$GITHUB_SHA" measure \
+            --experiment "$EXPERIMENT" --attempt "$GITHUB_RUN_ATTEMPT" \
+            --output "$RUNNER_TEMP/rwx-trials/$EXPERIMENT.json"
+          # The report refuses to rank experiments measured with different file maps.
+          digest="$(docker run --rm --platform linux/amd64 --entrypoint sha256sum blast-radius-entry \
+            /app/strategies/selectors/file_map.json.gz | cut -d' ' -f1)"
+          trials="$RUNNER_TEMP/rwx-trials/$EXPERIMENT.json"
+          echo "file map sha256: $digest"
+          jq --arg digest "$digest" '.map_digest = $digest' "$trials" > "$trials.tmp"
+          mv "$trials.tmp" "$trials"
+      - name: Save trials
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: trials-${{ github.sha }}-${{ github.run_attempt }}-${{ matrix.experiment }}
+          path: ${{ runner.temp }}/rwx-trials/${{ matrix.experiment }}.json
+          if-no-files-found: error
+
+  report:
+    needs: [experiments, benchmark]
+    # A failed or timed-out experiment job still gets a report; its runs count as failed.
+    if: ${{ !cancelled() && needs.experiments.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      eligible: ${{ steps.combine.outputs.eligible }}
+      artifact: ${{ steps.combine.outputs.artifact }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.13"
+      - name: Download trials
+        # No trial artifacts (every experiment job failed) still produces an incomplete report.
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: trials-${{ github.sha }}-*
+          path: ${{ runner.temp }}/rwx-trials
+      - name: Combine trials into reports
+        id: combine
+        env:
+          # A failed rerun leaves earlier attempts' artifacts behind, so job results decide completeness.
+          BENCHMARK_RESULT: ${{ needs.benchmark.result }}
+        run: |
+          set -euo pipefail
+          directory="$RUNNER_TEMP/rwx-benchmark"
+          mkdir -p "$RUNNER_TEMP/rwx-trials"
+          flags=()
+          if [[ "$BENCHMARK_RESULT" != success ]]; then
+            flags+=(--jobs-failed)
+          fi
+          python3 tools/benchmark_release.py --expected-sha "$GITHUB_SHA" report \
+            --trials-dir "$RUNNER_TEMP/rwx-trials" --output-dir "$directory" "${flags[@]}"
+          eligible="$(jq -r '.complete and (.winner != null)' "$directory/results.json")"
+          echo "eligible=$eligible" >> "$GITHUB_OUTPUT"
+          echo "artifact=benchmark-$GITHUB_SHA-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+          tee -a "$GITHUB_STEP_SUMMARY" < "$directory/report.md"
+      - name: Save benchmark reports
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ steps.combine.outputs.artifact }}
+          path: |
+            ${{ runner.temp }}/rwx-benchmark/report.md
+            ${{ runner.temp }}/rwx-benchmark/results.json
+          if-no-files-found: error
+
+  publish:
+    if: ${{ !cancelled() && needs.report.outputs.eligible == 'true' }}
+    needs: report
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download measured reports
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ needs.report.outputs.artifact }}
+          path: reports
+      - name: Release reports at the measured commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -f reports/report.md && test ! -L reports/report.md
+          test -f reports/results.json && test ! -L reports/results.json
+          jq -e --arg sha "$GITHUB_SHA" '
+            .schema == 1 and .commit == $sha and .complete == true and
+            (.winner | type == "string") and .winner == .ranking[0] and
+            .winner != .baseline and .experiments[.winner].eligible == true and
+            (.experiments[.winner].runs | length == 3 and
+              all(.[]; .status == "completed" and .missed_patches == 0))
+          ' reports/results.json >/dev/null
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          winner="$(jq -er '.winner | select(test("^[A-Za-z0-9][A-Za-z0-9_.-]*$"))' reports/results.json)"
+          median="$(jq -er '.experiments[.winner].median_total_seconds | select(test("^[0-9]+(\\.[0-9]+)?$"))' reports/results.json)"
+          tag="benchmark-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          {
+            printf 'Winner: `%s`, %s s median total on the public sample.\n\n' "$winner" "$median"
+            cat reports/report.md
+          } > release-notes.md
+          if [[ "$GITHUB_EVENT_NAME" != push ]]; then
+            echo "Dry run: reports validated; no tag or release is created outside pushes to main."
+            cat release-notes.md >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f "ref=refs/tags/$tag" -f "sha=$GITHUB_SHA" >/dev/null
+          gh release create "$tag" reports/report.md reports/results.json \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --latest=false \
+            --title "Public benchmark: ${GITHUB_SHA:0:12}" --notes-file release-notes.md
