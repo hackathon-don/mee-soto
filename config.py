@@ -17,6 +17,7 @@ from strategies.selectors.impact_first_failure_tables_free_cpu_outcomes import F
 from strategies.selectors.impact_keys import KeyReadImpact
 from strategies.selectors.impact_fixture_entries import FixtureEntryImpact
 from strategies.selectors.impact_optimizer_transcript import OptimizerTranscriptImpact
+from strategies.selectors.impact_stacked_maps import StackedMapsImpact
 from strategies.selectors.impact_tables import TableKeySelector
 
 MAX_WORKERS = 8
@@ -74,6 +75,10 @@ EXPERIMENTS: dict[str, Config] = {
 
 EXPERIMENTS["impact-first-failure-tables-free-cpu-outcomes"] = replace(
     EXPERIMENTS["impact-first-failure-tables-free-cpu"], selector_cls=FirstFailureTablesFreeCpuOutcomesImpact,
+)
+
+EXPERIMENTS["impact-first-failure-tables-free-cpu-stacked-maps"] = replace(
+    EXPERIMENTS["impact-first-failure-tables-free-cpu"], selector_cls=StackedMapsImpact,
 )
 
 DEFAULT_CONFIG = EXPERIMENTS["baseline"]
