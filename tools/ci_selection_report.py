@@ -56,8 +56,9 @@ def false_checks(cpu, answers_path: Path) -> FalseChecks:
     false = total = 0
     seconds = Decimal(0)
     for patch, data in cpu.items():
-        # Tests left unrun after an early stop are not checks.
-        checked = [n for n, _ in data.timed] if data.checked is None else data.checked
+        # Tests left unrun after an early stop are not checks. A failed class fixture
+        # re-reports tests that already completed, so count each test once.
+        checked = {n for n, _ in data.timed} if data.checked is None else set(data.checked)
         total += len(checked)
         false += sum(n not in failures[patch] for n in checked)
         # Per-check CPU exists only for children that exited cleanly.
