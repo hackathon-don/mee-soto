@@ -1,0 +1,85 @@
+name: Benchmark release
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish a GitHub release if the full batch has an eligible winner
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  benchmark:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    outputs:
+      eligible: ${{ steps.measure.outputs.eligible }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.13"
+      - name: Measure every registered experiment
+        id: measure
+        run: |
+          set -euo pipefail
+          directory="$RUNNER_TEMP/rwx-benchmark"
+          python3 tools/benchmark_release.py --expected-sha "$GITHUB_SHA" --output-dir "$directory"
+          eligible="$(jq -r '.complete and (.winner != null)' "$directory/results.json")"
+          echo "eligible=$eligible" >> "$GITHUB_OUTPUT"
+          cat "$directory/report.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Save benchmark reports
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: benchmark-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/rwx-benchmark/report.md
+            ${{ runner.temp }}/rwx-benchmark/results.json
+          if-no-files-found: error
+
+  publish:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.publish_release && needs.benchmark.outputs.eligible == 'true' }}
+    needs: benchmark
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download measured reports
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: benchmark-${{ github.sha }}-${{ github.run_attempt }}
+          path: reports
+      - name: Release reports at the measured commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -f reports/report.md && test ! -L reports/report.md
+          test -f reports/results.json && test ! -L reports/results.json
+          jq -e --arg sha "$GITHUB_SHA" '
+            .schema == 1 and .commit == $sha and .complete == true and
+            (.winner | type == "string") and .winner == .ranking[0] and
+            .winner != .baseline and .experiments[.winner].eligible == true and
+            (.experiments[.winner].runs | length == 3 and
+              all(.[]; .status == "completed" and .missed_patches == 0))
+          ' reports/results.json >/dev/null
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          winner="$(jq -er '.winner | select(test("^[A-Za-z0-9][A-Za-z0-9_.-]*$"))' reports/results.json)"
+          median="$(jq -er '.experiments[.winner].median_total_seconds | select(test("^[0-9]+(\\.[0-9]+)?$"))' reports/results.json)"
+          tag="benchmark-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          printf 'Winner: `%s`, %s s median total on the public sample.\n\nMeasured commit: `%s`.\n' \
+            "$winner" "$median" "$GITHUB_SHA" > release-notes.md
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f "ref=refs/tags/$tag" -f "sha=$GITHUB_SHA" >/dev/null
+          gh release create "$tag" reports/report.md reports/results.json \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --latest=false \
+            --title "Public benchmark: ${GITHUB_SHA:0:12}" --notes-file release-notes.md

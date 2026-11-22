@@ -141,6 +141,20 @@ For a local diagnostic run on native Linux amd64, use
 to stderr and the timed CI run includes logging overhead. The default and judge
 entrypoints do not enable this instrumentation.
 
+## Benchmark release
+
+Run **Benchmark release** manually on main to benchmark every registered
+experiment three times at the dispatched commit. The workflow saves the human
+report and structured results as artifacts, even if publication is off. The
+baseline is a reference; eligible candidates finish all three runs without a
+miss and are ranked by exact median simulated-plus-CPU time. An incomplete batch
+or no eligible candidate cannot release.
+
+Publication is opt-in. With **publish_release** enabled, a separate job
+validates the saved result and attaches both reports to a release tagged at the
+measured commit. It does not change the default experiment or submit anything
+to the leaderboard.
+
 ## Impact selector
 
 `strategies/selectors/impact/` holds `ImpactSelector`. The maps committed
