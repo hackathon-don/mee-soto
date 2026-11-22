@@ -7,6 +7,8 @@ import re
 
 
 ZERO = Decimal(0)
+# Float rounding allowance per summed value when comparing check CPU with child CPU.
+FLOAT_SLACK = Decimal("1e-9")
 PREFIX = "RWX_CPU_V1 "
 PATCH_ID = re.compile(r"[a-zA-Z0-9_-]+")
 
@@ -68,7 +70,7 @@ def render_cpu(experiment: str, total: Decimal, cpu: dict[str, PatchCpu] | None,
         kept = sum((seconds for number, seconds in data.timed if number in selected), ZERO)
         omitted = sum((seconds for number, seconds in data.timed if number not in selected), ZERO)
         # When counters disagree, retain measured child CPU but do not invent a split.
-        if kept + omitted > data.child:
+        if kept + omitted > data.child + FLOAT_SLACK * (len(data.timed) + 1):
             kept = omitted = None
         rows.append((patch, data, len(selected), kept, omitted, len(data.timed)))
 
@@ -83,7 +85,7 @@ def render_cpu(experiment: str, total: Decimal, cpu: dict[str, PatchCpu] | None,
     values = []
     if split:
         values += [("Verified and scheduled", kept), ("Verified and omitted", omitted)]
-    values += [("Other verifier-child CPU", child - kept - omitted),
+    values += [("Other verifier-child CPU", max(child - kept - omitted, ZERO)),
                ("Unattributed CPU", total - child)]
     lines += ["Percentages use this experiment's total selector CPU. "
               "Timing includes opt-in CI logging overhead.", "", "```text"]
@@ -113,7 +115,7 @@ def render_cpu(experiment: str, total: Decimal, cpu: dict[str, PatchCpu] | None,
         else:
             has_split = k is not None and bool(timed)
             parts = f"{k:.3f}s | {o:.3f}s" if has_split else "— | —"
-            other = data.child - k - o if k is not None else data.child
+            other = max(data.child - k - o, ZERO) if k is not None else data.child
             other_text = "—" if data.incomplete_children and not data.child else f"{other:.3f}s"
             lines.append(
                 f"| `{patch}` | {timed} | {count} | {parts} | "

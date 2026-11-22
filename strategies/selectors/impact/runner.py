@@ -166,7 +166,7 @@ class _Result(unittest.TestResult):
         key = self._key(test)
         if key is not None:
             self.done.add(key)
-            self.emit({"d": key, "ok": key not in self.failed, "cpu": round(time.process_time() - self.t0, 4)})
+            self.emit({"d": key, "ok": key not in self.failed, "cpu": time.process_time() - self.t0})
         self.current = None
         super().stopTest(test)
 
@@ -320,6 +320,6 @@ def child_main(
             # A class or module fixture failed: every selected test in it fails.
             for number, _, _ in items:
                 emit({"d": number, "ok": False})
-    t = os.times()
-    emit({"cpu_total": round(t.user + t.system, 3)})
+    # Same clock as per-test CPU, unrounded, so per-test timings never exceed the total.
+    emit({"cpu_total": time.process_time()})
     out.flush()
