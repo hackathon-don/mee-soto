@@ -9,10 +9,14 @@ import re
 import subprocess
 import sys
 
+from decimal import Decimal
+
 if __package__:
-    from .ci_score import experiment_names, median_run, print_experiment, print_selection_errors, score_with_schedule
+    from .ci_score import (DiagnosticRun, Score, experiment_names, median_run, print_experiment,
+                           print_selection_errors, score_with_schedule)
 else:
-    from ci_score import experiment_names, median_run, print_experiment, print_selection_errors, score_with_schedule
+    from ci_score import (DiagnosticRun, Score, experiment_names, median_run, print_experiment,
+                          print_selection_errors, score_with_schedule)
 
 
 REPEATS = 3
@@ -159,19 +163,88 @@ def render_markdown(record, results):
     return output.getvalue()
 
 
+def trial_record(run):
+    if run is None:
+        return None
+    s = run.score
+    schedule = None if run.schedule is None else {p: sorted(t) for p, t in run.schedule.items()}
+    return {"simulated": str(s.simulated), "cpu": str(s.cpu), "missed": s.missed, "schedule": schedule}
+
+
+def load_trial(row):
+    if row is None:
+        return None
+    simulated, cpu, missed = Decimal(row["simulated"]), Decimal(row["cpu"]), row["missed"]
+    if (not simulated.is_finite() or not cpu.is_finite() or simulated < 0 or cpu < 0
+            or type(missed) is not int or missed < 0):
+        raise ValueError("invalid trial score")
+    schedule = row["schedule"]
+    if schedule is not None:
+        if any(not re.fullmatch(r"[a-zA-Z0-9_-]+", p) or any(type(t) is not int for t in tests)
+               for p, tests in schedule.items()):
+            raise ValueError("invalid trial schedule")
+        schedule = {p: set(tests) for p, tests in schedule.items()}
+    return DiagnosticRun(Score(simulated, cpu, missed), None, schedule)
+
+
+def load_trials(directory, names):
+    """Keep each experiment's latest attempt; a missing or invalid file counts as failed runs."""
+    latest = {}
+    for path in sorted(directory.rglob("*.json")):
+        try:
+            obj = json.loads(path.read_text(encoding="utf-8"))
+            name, attempt = obj["experiment"], obj["attempt"]
+            if name not in names or type(attempt) is not int:
+                continue
+            rows = [load_trial(row) for row in obj["runs"]]
+            if len(rows) != REPEATS:
+                continue
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            continue
+        if name not in latest or attempt > latest[name][0]:
+            latest[name] = (attempt, rows)
+    return {name: latest[name][1] if name in latest else [None] * REPEATS for name in names}
+
+
+def checked_commit(parser, expected):
+    commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    if not re.fullmatch(r"[0-9a-f]{40}", expected) or commit != expected:
+        parser.error("the checkout does not match the measured full SHA")
+    return commit
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--expected-sha", required=True)
-    parser.add_argument("--output-dir", type=Path, required=True)
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("list", help="print registered experiment names as JSON")
+    measure = commands.add_parser("measure", help="run one experiment's trials")
+    measure.add_argument("--experiment", required=True)
+    measure.add_argument("--attempt", type=int, required=True)
+    measure.add_argument("--output", type=Path, required=True)
+    report = commands.add_parser("report", help="combine trial files into the reports")
+    report.add_argument("--trials-dir", type=Path, required=True)
+    report.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
-    commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-    if not re.fullmatch(r"[0-9a-f]{40}", args.expected_sha) or commit != args.expected_sha:
-        parser.error("the checkout does not match the measured full SHA")
-    results = collect(registered_at(commit))
-    record = make_record(commit, results)
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    (args.output_dir / "results.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
-    (args.output_dir / "report.md").write_text(render_markdown(record, results), encoding="utf-8")
+    commit = checked_commit(parser, args.expected_sha)
+    names = registered_at(commit)
+    if args.command == "list":
+        print(json.dumps(names))
+    elif args.command == "measure":
+        if args.experiment not in names:
+            parser.error("experiment is not registered at the measured commit")
+        rows = collect([args.experiment])[args.experiment]
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps({
+            "experiment": args.experiment, "attempt": args.attempt,
+            "runs": [trial_record(run) for run in rows],
+        }) + "\n", encoding="utf-8")
+    else:
+        results = load_trials(args.trials_dir, names)
+        record = make_record(commit, results)
+        args.output_dir.mkdir(parents=True, exist_ok=True)
+        (args.output_dir / "results.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+        (args.output_dir / "report.md").write_text(render_markdown(record, results), encoding="utf-8")
 
 
 if __name__ == "__main__":

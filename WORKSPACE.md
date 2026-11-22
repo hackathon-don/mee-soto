@@ -145,8 +145,9 @@ entrypoints do not enable this instrumentation.
 
 **Benchmark release** runs on every push to main and benchmarks every
 registered experiment three times at the pushed commit, without CPU
-diagnostics so logging overhead stays out of the ranked totals. The workflow
-saves the human report and structured results as artifacts, even when nothing
+diagnostics so logging overhead stays out of the ranked totals. Each experiment
+runs in its own job on its own machine, and a report job combines their trials;
+an experiment whose job fails counts as failed runs. The workflow saves the human report and structured results as artifacts, even when nothing
 is released. The
 baseline is a reference; eligible candidates finish all three runs without a
 miss and are ranked by exact median simulated-plus-CPU time. An incomplete batch
