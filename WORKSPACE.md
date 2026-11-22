@@ -50,7 +50,9 @@ the known failing tests. The same modes run directly as
   `EXPERIMENTS` holds named configs; `DEFAULT_CONFIG` is the baseline entry,
   using `AllTestsSelector` and `LptScheduler`. No flag preserves the supplied
   config (or `DEFAULT_CONFIG`); `--experiment` replaces it, then `--data`
-  overrides its data directory. The judge runs the image without flags.
+  overrides its data directory. The judge runs the image without flags, so the
+  `Dockerfile` `CMD` passes `--experiment impact-full-optimizer-proof`; the
+  Makefile targets override `CMD` and pass `EXPERIMENT` instead.
 - `strategies/selectors/` defines `Selector`, `CatalogTest`, and the `Patch`
   record (commit id and diff text). A selector is constructed once with
   `(catalog, config)`. Its `select(commits)` method processes the batch and
