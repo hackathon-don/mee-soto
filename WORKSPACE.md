@@ -249,3 +249,30 @@ narrowing dropped 14,166 of 22,020 candidates, the base candidates produced
 `test_max_nodes` on three mutants when several copies ran at once; it passes
 under pytest on each of those patched trees. These results do not guarantee
 zero misses on hidden patches.
+
+## Held-out patch set
+
+The 30 public patches are tuning data. To check a selector on patches nothing
+was tuned on, generate a held-out set from the pinned commit, label it by
+running the full catalog, and score experiments on it. None of this runs in
+`make e2e`, `make test`, CI or the image: the tools sit in `tools/` and the
+data in `out/holdout/`, both outside the Docker build context and Git.
+
+```sh
+python3 tools/holdout_mutants.py <pinned sqlglot checkout> out/holdout 150
+docker run --rm --network none --memory 7g \
+  -v "$PWD/tools/holdout_label:/label:ro" -v "$PWD/out/holdout:/holdout" \
+  -v "$PWD/sample/tests.json:/data/tests.json:ro" blast-radius-entry-dev \
+  python /label/label.py /holdout /data/tests.json 6
+python3 tools/holdout_eval.py out/holdout 30 impact-variable-workers-matched impact-variable-workers-matched:off
+```
+
+`holdout_mutants.py` mirrors the sample's mix and edit shapes (code 16,
+fixture 8, multi 3, comment 3 of 30) on uniformly drawn lines. `label.py`
+runs every catalog test file under pytest on each patched tree; a test is
+failing when any report fails, subtests included, and it passes unpatched.
+Labeling takes about one to two minutes a patch and resumes from
+`labels.jsonl`. `holdout_eval.py` runs the dev image under the scorer's flags
+on batches of the given size, with only the batch's patches mounted, and
+lists every missed test. `<experiment>:off` sets `BR_MIN_EVIDENCE` so high
+that `ImpactSelector` never defers its two heavy tests.
