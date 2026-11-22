@@ -33,6 +33,7 @@ from tools.ci_score import experiment_names  # noqa: E402
 HERE = ROOT / "autoresearch"
 SAMPLE = ROOT / "sample"
 WORK = ROOT / "out" / "autoresearch"
+HOLDOUT = ROOT / "out" / "holdout"
 LEDGERS = {"loop": HERE / "results.tsv", "validate": HERE / "validation.tsv"}
 SPLIT_FOR_MODE = {"loop": "search", "validate": "validation"}
 FIELDS = [
@@ -122,14 +123,29 @@ def check_candidate(kept: str, experiment: str, ledger: list[dict]) -> list[str]
     return problems
 
 
-def prepare_split(split: str) -> Path:
+def prepare_split(split: str, holdout: Path = HOLDOUT) -> Path:
     commits = json.loads((HERE / "splits.json").read_text("utf-8"))[split]
-    answers = json.loads((SAMPLE / "answers.json").read_text("utf-8"))["commits"]
+    if split == "validation":
+        source = holdout
+        labels = source / "labels.jsonl"
+        if not labels.is_file():
+            fail(f"no held-out labels at {labels}; run make holdout first or pass --holdout")
+        with labels.open(encoding="utf-8") as stream:
+            answers = {record["commit"]: {"failing": record["failing"]}
+                       for record in map(json.loads, stream) if "error" not in record}
+    else:
+        source = SAMPLE
+        answers = json.loads((source / "answers.json").read_text("utf-8"))["commits"]
+    for commit in commits:
+        if commit not in answers:
+            fail(f"{split} commit {commit!r} has no successful label in {source}")
+        if not (source / "commits" / f"{commit}.patch").is_file():
+            fail(f"{split} commit {commit!r} has no patch in {source / 'commits'}")
     data = WORK / split
     shutil.rmtree(data, ignore_errors=True)
     (data / "commits").mkdir(parents=True)
     for commit in commits:
-        shutil.copy(SAMPLE / "commits" / f"{commit}.patch", data / "commits")
+        shutil.copy(source / "commits" / f"{commit}.patch", data / "commits")
     shutil.copy(SAMPLE / "tests.json", data)
     (data / "answers.json").write_text(
         json.dumps({"commits": {commit: answers[commit] for commit in commits}}), "utf-8"
@@ -194,7 +210,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("mode", choices=SPLIT_FOR_MODE)
     parser.add_argument("--experiment", required=True)
+    parser.add_argument("--holdout", type=Path, help="validation labels and patches (default: out/holdout)")
     args = parser.parse_args()
+    if args.holdout is not None and args.mode != "validate":
+        parser.error("--holdout is only available in validate mode")
 
     branch = git("rev-parse", "--abbrev-ref", "HEAD")
     if git("status", "--porcelain", "--untracked-files=no"):
@@ -217,7 +236,7 @@ def main() -> int:
         evaluation = {"ok": False, "code": "rejected"}
         status, reason = "reject", "outside the rules: " + "; ".join(problems)
     else:
-        evaluation = run_experiment(args.experiment, prepare_split(split))
+        evaluation = run_experiment(args.experiment, prepare_split(split, args.holdout or HOLDOUT))
         if args.mode == "loop":
             status, reason = decide(evaluation, kept_row)
         elif evaluation["ok"]:
