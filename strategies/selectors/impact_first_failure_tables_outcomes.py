@@ -8,7 +8,9 @@ from .impact import selector
 from .impact.diffparse import apply_patch, parse_patch
 from .impact_first_failure_tables import FirstFailureTablesImpact
 from .map_format import catalog_records, catalog_sha256
-from .outcome_format import changed_operator, classify, classify_pairs, identity, tree_digest
+from .outcome_format import (
+    EXECUTOR_CLOCK_PATH, changed_operator, classify, classify_pairs, executor_clock_line, identity, tree_digest,
+)
 
 
 class FirstFailureTablesOutcomesImpact(FirstFailureTablesImpact):
@@ -52,7 +54,12 @@ class FirstFailureTablesOutcomesImpact(FirstFailureTablesImpact):
             return None
         before = path.read_text(encoding="utf-8")
         after = apply_patch(before, file)
-        return changed_operator(file.path, before, after) if after is not None else None
+        if after is None:
+            return None
+        if (file.path == EXECUTOR_CLOCK_PATH and executor_clock_line(before.encode()) is not None
+                and executor_clock_line(after.encode()) is None):
+            return None
+        return changed_operator(file.path, before, after)
 
     def select(self, commits):
         edits = {}

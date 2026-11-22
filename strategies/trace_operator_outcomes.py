@@ -14,13 +14,15 @@ import operator
 import os
 import sys
 import threading
+from time import time as wall_time
+from types import CodeType
 from itertools import count
 from multiprocessing import spawn
 from multiprocessing.context import SpawnProcess
 from multiprocessing.process import BaseProcess
 from pathlib import Path
 
-from .selectors.outcome_format import OPS, site_id
+from .selectors.outcome_format import EXECUTOR_CLOCK_PATH, OPS, executor_clock_line, site_id
 
 
 HOOK = "__rwx_record_comparison__"
@@ -166,6 +168,7 @@ class Recorder(importlib.abc.MetaPathFinder):
         self.unknown = False
         self.diagnose = diagnose
         self.loading = None
+        self.executor_clock = None
         self.compact = os.environ.get("BR_OUTCOME_COMPACT") == "1"
         cache = os.environ.get("BR_OUTCOME_CODE_CACHE")
         self.cache = Path(cache) if cache else None
@@ -204,6 +207,10 @@ class Recorder(importlib.abc.MetaPathFinder):
             module = getattr(arg, "__module__", None)
             owner = getattr(arg, "__self__", None)
             name = getattr(arg, "__name__", "")
+            if (arg is wall_time and self.executor_clock is not None
+                    and frame.f_globals.get("__name__") == "sqlglot.executor"
+                    and frame.f_code is self.executor_clock[0] and frame.f_lineno == self.executor_clock[1]):
+                return
             iso_parse = name == "fromisoformat" and (
                 owner is datetime.date or owner is datetime.datetime or owner is datetime.time
             )
@@ -245,7 +252,7 @@ class Recorder(importlib.abc.MetaPathFinder):
             self.reject(f"unexpected origin for {fullname}: {origin}")
             return spec
         rel = origin.relative_to(self.root).as_posix()
-        if self.paths is None or rel in self.paths:
+        if self.paths is None or rel in self.paths or rel == EXECUTOR_CLOCK_PATH:
             spec.loader = Loader(fullname, spec.origin, self, rel)
         return spec
 
@@ -333,6 +340,11 @@ class Loader(importlib.machinery.SourceFileLoader):
                                     rewrite_code(source, self.path, self.rel, self.recorder.targets))
         if collision:
             self.recorder.reject(f"comparison observer name collision in {self.rel}")
+        if self.rel == EXECUTOR_CLOCK_PATH:
+            line = executor_clock_line(source)
+            functions = [part for part in code.co_consts
+                         if isinstance(part, CodeType) and part.co_qualname == "execute"]
+            self.recorder.executor_clock = (functions[0], line) if line is not None and len(functions) == 1 else None
         self.recorder.skipped.update(skipped)
         return code
 

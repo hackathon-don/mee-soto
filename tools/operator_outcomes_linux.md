@@ -75,6 +75,8 @@ docker_trace --output /out/pilot-verified.json.gz --batch-file /out/batches.json
 # Batch replay allows 10× each manifest check limit for instrumentation.
 # The original manifest still keys the proof, and the build and process limits
 # still apply. The log keeps batch stderr and distinguishes these timeouts.
+# Only the first time.time() in the pinned executor.execute is exempt.
+# If replay reaches another clock read, it is still rejected.
 
 # Separate, bounded full-site trace. Review coverage as well as elapsed time.
 docker_trace --output /out/full.json.gz --all-sites --batch-file /out/batches.json \
