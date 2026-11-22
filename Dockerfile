@@ -5,14 +5,16 @@ FROM ${BASE} AS deps
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 COPY requirements.lock /tmp/requirements.lock
 RUN python -m pip install -r /tmp/requirements.lock
-ARG FREE_CPU_BYTECODE=0
+ARG FREE_CPU_BYTECODE=1
 RUN if [ "${FREE_CPU_BYTECODE}" = "1" ]; then \
         python -m compileall -q -f -j 0 --invalidation-mode unchecked-hash /usr/local/lib/python3.13; \
     else \
         python -m compileall -q -j 0 /usr/local/lib/python3.13 >/dev/null || true; \
     fi
-ADD https://github.com/tobymao/sqlglot/archive/eb11aec4be8cb2122afe713a4816662c3f0fb2fa.tar.gz /tmp/sqlglot.tar.gz
+ARG SQLGLOT_REV=eb11aec4be8cb2122afe713a4816662c3f0fb2fa
+ADD https://github.com/tobymao/sqlglot/archive/${SQLGLOT_REV}.tar.gz /tmp/sqlglot.tar.gz
 RUN mkdir -p /opt/sg && tar xzf /tmp/sqlglot.tar.gz -C /opt/sg --strip-components=1 && rm /tmp/sqlglot.tar.gz \
+    && printf '%s\n' "$SQLGLOT_REV" > /opt/sg/.blast-radius-sqlglot-rev \
     && if [ "${FREE_CPU_BYTECODE}" = "1" ]; then \
         python -m compileall -q -j 0 --invalidation-mode checked-hash /opt/sg; \
     else \
@@ -30,10 +32,10 @@ WORKDIR /app
 RUN python -m strategies.selectors.impact.static /opt/sg strategies/selectors/impact/maps/index.pkl.gz strategies/selectors/impact/maps/static.pkl.gz \
     && python -m compileall -q /app >/dev/null \
     && chmod -R a+rX /app
-ARG FREE_CPU_MAPS=0
+ARG FREE_CPU_MAPS=1
 RUN if [ "${FREE_CPU_MAPS}" = "1" ]; then \
         python -c 'from gzip import decompress; from pathlib import Path; paths = [*Path("strategies/selectors/impact/maps").glob("*.pkl.gz"), Path("strategies/selectors/impact_tables.json.gz")]; [p.with_suffix("").write_bytes(decompress(p.read_bytes())) for p in paths]'; \
     fi
 # The judge runs the image without flags, so the submitted experiment is set
 # here. Local runs without --experiment still use DEFAULT_CONFIG (baseline).
-CMD ["python", "/app/main.py", "--experiment", "impact-variable-workers-matched"]
+CMD ["python", "/app/main.py", "--experiment", "impact-first-failure-tables-free-cpu"]

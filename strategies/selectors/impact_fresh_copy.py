@@ -7,7 +7,7 @@ import re
 
 from .impact import ImpactSelector
 from .impact.diffparse import apply_patch, parse_patch
-from .impact.selector import SG, log
+from .impact.selector import DECISION_LOG, SG, log
 
 RULE = "sqlglot/optimizer/eliminate_subqueries.py"
 FIXTURE_TEST_MODULE = "tests/test_optimizer.py"
@@ -118,6 +118,9 @@ class FreshTableCopyImpact(ImpactSelector):
                 removable = self.structural.intersection(selected, plan.include)
                 removable.difference_update(plan.failed, plan.run, self.ctx.never)
                 if removable:
+                    if DECISION_LOG:
+                        for number in removable:
+                            plan.decisions[number] = ("proven_unaffected", "FreshTableCopyImpact")
                     log(f"{cid}: {len(removable)} structural fixture test certified for a fresh copy")
                     selected = [number for number in selected if number not in removable]
             yield cid, selected

@@ -1,7 +1,7 @@
 # Blast Radius selector
 
 A working submission for the Blast Radius track. The submitted image runs the
-`impact-variable-workers-matched` experiment (set in the `Dockerfile` `CMD`); the
+`impact-first-failure-tables-free-cpu` experiment (set in the `Dockerfile` `CMD`); the
 default config elsewhere runs every test on every commit. `ImpactSelector`
 narrows candidates with committed line-coverage maps and an AST diff, then runs the cheap ones against the
 patched tree inside the container and keeps the ones that fail. See

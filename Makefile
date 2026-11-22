@@ -4,7 +4,8 @@ SHELL := /bin/bash
 IMAGE ?= blast-radius-entry
 EXPERIMENT ?= baseline
 CPU_DIAGNOSTICS ?= 0
-DIAGNOSTIC_FLAGS = $(if $(filter 1,$(CPU_DIAGNOSTICS)),--env BR_CPU_DIAGNOSTICS=1)
+DECISION_LOG ?= 0
+DIAGNOSTIC_FLAGS = $(if $(filter 1,$(CPU_DIAGNOSTICS)),--env BR_CPU_DIAGNOSTICS=1) $(if $(filter 1,$(DECISION_LOG)),--env BR_DECISION_LOG=1)
 DEV_IMAGE ?= $(IMAGE)-dev
 NATIVE_PLATFORM = linux/$(shell docker version -f '{{.Server.Arch}}')
 SAMPLE := $(CURDIR)/sample

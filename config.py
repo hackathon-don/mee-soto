@@ -1,6 +1,6 @@
 """Selector and scheduler experiment configuration."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from strategies.schedulers import Scheduler
@@ -13,6 +13,8 @@ from strategies.selectors.impact import ImpactSelector
 from strategies.selectors.impact_first_failure import FirstFailureImpact
 from strategies.selectors.impact_first_failure_tables import FirstFailureTablesImpact
 from strategies.selectors.impact_first_failure_tables_free_cpu import FirstFailureTablesFreeCpuImpact
+from strategies.selectors.impact_first_failure_tables_free_cpu_outcomes import FirstFailureTablesFreeCpuOutcomesImpact
+from strategies.selectors.impact_first_failure_tables_outcomes import FirstFailureTablesOutcomesImpact
 from strategies.selectors.impact_fresh_copy import FreshTableCopyImpact
 from strategies.selectors.impact_individual_proof import IndividualProofImpact
 from strategies.selectors.impact_optimizer_transcript import OptimizerTranscriptImpact
@@ -53,6 +55,9 @@ EXPERIMENTS: dict[str, Config] = {
     "impact-first-failure-tables": Config(
         selector_cls=FirstFailureTablesImpact, scheduler_cls=VariableWorkerScheduler
     ),
+    "impact-first-failure-tables-outcomes": Config(
+        selector_cls=FirstFailureTablesOutcomesImpact, scheduler_cls=VariableWorkerScheduler
+    ),
     "impact-first-failure-tables-free-cpu": Config(
         selector_cls=FirstFailureTablesFreeCpuImpact,
         scheduler_cls=VariableWorkerScheduler,
@@ -62,5 +67,9 @@ EXPERIMENTS: dict[str, Config] = {
         selector_cls=FirstFailureImpact, scheduler_cls=ExactPackingScheduler
     ),
 }
+
+EXPERIMENTS["impact-first-failure-tables-free-cpu-outcomes"] = replace(
+    EXPERIMENTS["impact-first-failure-tables-free-cpu"], selector_cls=FirstFailureTablesFreeCpuOutcomesImpact,
+)
 
 DEFAULT_CONFIG = EXPERIMENTS["baseline"]

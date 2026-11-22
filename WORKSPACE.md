@@ -56,7 +56,7 @@ the known failing tests. The same modes run directly as
   using `AllTestsSelector` and `LptScheduler`. No flag preserves the supplied
   config (or `DEFAULT_CONFIG`); `--experiment` replaces it, then `--data`
   overrides its data directory. The judge runs the image without flags, so the
-  `Dockerfile` `CMD` passes `--experiment impact-variable-workers-matched`; the
+  `Dockerfile` `CMD` passes `--experiment impact-first-failure-tables-free-cpu`; the
   Makefile targets override `CMD` and pass `EXPERIMENT` instead.
 - `strategies/selectors/` defines `Selector`, `CatalogTest`, and the `Patch`
   record (commit id and diff text). A selector is constructed once with
@@ -153,6 +153,12 @@ For a local diagnostic run on native Linux amd64, use
 `make e2e EXPERIMENT=impact CPU_DIAGNOSTICS=1`. Detailed records go only
 to stderr and the timed CI run includes logging overhead. The default and judge
 entrypoints do not enable this instrumentation.
+
+For an opt-in selector decision log, run
+`make e2e EXPERIMENT=<name> DECISION_LOG=1`. Independently of CPU diagnostics,
+stderr contains `RWX_DECISION_V1 {json}` lines for each pre-narrowing candidate
+and a per-patch summary. Records describe the final kept/dropped verdict, rule,
+and recorded verification CPU (or null). It is off in default and scored runs.
 
 ## Benchmark release
 
