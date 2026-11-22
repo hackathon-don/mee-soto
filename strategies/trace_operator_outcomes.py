@@ -454,6 +454,7 @@ def trace(root, node, result, sites):
 def trace_batch(root, manifest, result, sites):
     from .selectors.impact.runner import child_main
     from .selectors.impact.selector import IMPORT_PROBE_TIMEOUT, preimport
+    from .trace_operator_batch import batch_diagnostics, replay_limits
 
     batch = json.loads(Path(manifest).read_text())
     recorder = Recorder(root, None if sites is None else set(json.loads(Path(sites).read_text())),
@@ -462,8 +463,10 @@ def trace_batch(root, manifest, result, sites):
     recorder.install()
     workers = Workers(root, result, sites)
     events = result.with_suffix(".events")
-    child_main(str(root), batch["tests"], os.open(events, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600),
-               import_checks=batch["imports"], import_timeout=IMPORT_PROBE_TIMEOUT)
+    cases = replay_limits(batch["tests"])
+    with batch_diagnostics(cases, IMPORT_PROBE_TIMEOUT, batch_rejection):
+        child_main(str(root), cases, os.open(events, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600),
+                   import_checks=batch["imports"], import_timeout=IMPORT_PROBE_TIMEOUT)
     records = [json.loads(line) for line in events.read_text().splitlines()]
     checked = [event for event in records if "d" in event]
     imported = [event for event in records if "i" in event]
@@ -471,9 +474,9 @@ def trace_batch(root, manifest, result, sites):
         return
     failed = next((event for event in records if event.get("ok") is False), None)
     if failed is not None and "i" in failed:
-        batch_rejection(f"import probe failed or timed out: {failed['i']}")
+        batch_rejection(f"unsuccessful import probe {failed['i']}")
     elif failed is not None and "d" in failed:
-        batch_rejection(f"check {failed['d']} failed or timed out")
+        batch_rejection(f"unsuccessful verifier result for check {failed['d']}")
     elif not records or "cpu_total" not in records[-1]:
         batch_rejection("verifier did not report normal completion")
     elif sorted(event["d"] for event in checked) != sorted(test[0] for test in batch["tests"]):

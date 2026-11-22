@@ -123,11 +123,15 @@ def collect(root, tests, requested, indexed, jobs, budget, timeout, batches, com
                     trace_env = env if batch is not None else dict(env, PYTHON_CPU_COUNT="2")
                     with subprocess.Popen(argv, cwd=root, env=trace_env, stdout=subprocess.DEVNULL,
                                           stderr=stderr, start_new_session=True) as child:
-                        limit = max(0, min(deadline - time.monotonic(), timeout))
+                        wait_started = time.monotonic()
+                        remaining = deadline - wait_started
+                        limit = max(0, min(remaining, timeout))
                         try:
                             code = child.wait(timeout=limit)
                         except subprocess.TimeoutExpired:
-                            reason = f"trace timed out after {limit:.1f}s"
+                            kind = "remaining build budget" if remaining <= timeout else "trace process timeout"
+                            reason = (f"trace process timed out after {time.monotonic() - wait_started:.2f}s "
+                                      f"({limit:.2f}s {kind})")
                             try:
                                 os.killpg(child.pid, signal.SIGKILL)
                             except ProcessLookupError:
@@ -139,11 +143,15 @@ def collect(root, tests, requested, indexed, jobs, budget, timeout, batches, com
                         reason = f"trace exited with status {code}"
                 except (OSError, ValueError) as error:
                     reason = f"trace error: {error}"
-                if batch is not None and report is None:
+                if batch is not None:
                     stderr.seek(0)
-                    reason = next((line.removeprefix(BATCH_REJECTION).rstrip()
-                                   for line in stderr if line.startswith(BATCH_REJECTION)), reason)
-                    rejected(reason)
+                    if report is None:
+                        rejected(reason)
+                    for line in stderr:
+                        if line.startswith(BATCH_REJECTION):
+                            rejected(line.removeprefix(BATCH_REJECTION).rstrip())
+                        else:
+                            print(line, file=sys.stderr, end="", flush=True)
             return mode, key, report, time.monotonic() - started
 
         completed, skipped, rows, verified = [], set(), {}, []

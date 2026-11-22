@@ -72,6 +72,10 @@ docker_trace --output /out/pilot-verified.json.gz --batch-file /out/batches.json
   --site sqlglot/dialects/dialect.py:1280 --site sqlglot/executor/context.py:53 \
   "${pilot[@]}" 2>&1 | tee "$out/pilot-verified-build.log"
 
+# Batch replay allows 10× each manifest check limit for instrumentation.
+# The original manifest still keys the proof, and the build and process limits
+# still apply. The log keeps batch stderr and distinguishes these timeouts.
+
 # Separate, bounded full-site trace. Review coverage as well as elapsed time.
 docker_trace --output /out/full.json.gz --all-sites --batch-file /out/batches.json \
   --compact-records --cache-rewrites --budget-seconds 540 \
