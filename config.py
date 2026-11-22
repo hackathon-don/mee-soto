@@ -11,6 +11,7 @@ from strategies.selectors import Selector
 from strategies.selectors.all_tests import AllTestsSelector
 from strategies.selectors.impact import ImpactSelector
 from strategies.selectors.impact_first_failure import FirstFailureImpact
+from strategies.selectors.impact_first_failure_tables import FirstFailureTablesImpact
 from strategies.selectors.impact_optimizer_transcript import OptimizerTranscriptImpact
 from strategies.selectors.impact_tables import TableKeySelector
 
@@ -42,6 +43,9 @@ EXPERIMENTS: dict[str, Config] = {
     ),
     "impact-first-failure": Config(
         selector_cls=FirstFailureImpact, scheduler_cls=VariableWorkerScheduler
+    ),
+    "impact-first-failure-tables": Config(
+        selector_cls=FirstFailureTablesImpact, scheduler_cls=VariableWorkerScheduler
     ),
     "impact-first-failure-exact-packing": Config(
         selector_cls=FirstFailureImpact, scheduler_cls=ExactPackingScheduler
