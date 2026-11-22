@@ -26,6 +26,7 @@ RUN mkdir -p /opt/sg && tar xzf /tmp/sqlglot.tar.gz -C /opt/sg --strip-component
 # unprivileged user. ImpactSelector runs tests against /opt/sg, so this stage
 # keeps the pinned dependencies and source.
 FROM deps AS runtime
+ENV PYTHONHASHSEED=0
 COPY main.py config.py local_cpu.py /app/
 COPY strategies/ /app/strategies/
 WORKDIR /app
