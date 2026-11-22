@@ -20,6 +20,7 @@ from strategies.selectors.impact_heavy_drop import HeavyDropImpact
 from strategies.selectors.impact_optimizer_transcript import OptimizerTranscriptImpact
 from strategies.selectors.impact_stacked_maps import StackedMapsImpact
 from strategies.selectors.impact_tables import TableKeySelector
+from strategies.selectors.impact_verify_heavy import VerifyHeavyImpact
 
 MAX_WORKERS = 8
 
@@ -84,6 +85,10 @@ EXPERIMENTS["impact-first-failure-tables-free-cpu-stacked-maps"] = replace(
 
 EXPERIMENTS["impact-stacked-maps-heavy-drop"] = replace(
     EXPERIMENTS["impact-first-failure-tables-free-cpu-stacked-maps"], selector_cls=HeavyDropImpact,
+)
+
+EXPERIMENTS["impact-stacked-maps-verify-heavy"] = replace(
+    EXPERIMENTS["impact-first-failure-tables-free-cpu-stacked-maps"], selector_cls=VerifyHeavyImpact,
 )
 
 DEFAULT_CONFIG = EXPERIMENTS["baseline"]
