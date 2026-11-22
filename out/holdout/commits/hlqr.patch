@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/eliminate_subqueries.sql b/tests/fixtures/optimizer/eliminate_subqueries.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/eliminate_subqueries.sql
++++ b/tests/fixtures/optimizer/eliminate_subqueries.sql
+@@ -96,7 +96,7 @@
+ 
+ -- Wrapped subquery with redundant parentheses
+ SELECT * FROM (((SELECT * FROM tbl)));
+-WITH cte AS (SELECT * FROM tbl) SELECT * FROM cte AS cte;
++WITH cte AS AS (SELECT * FROM tbl) SELECT * FROM cte AS cte;
+ 
+ -- CTE hoisted from a DML value-position subquery stays within that subquery
+ UPDATE t SET x = (SELECT a FROM (SELECT a FROM x) AS y);

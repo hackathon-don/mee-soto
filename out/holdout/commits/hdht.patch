@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/annotate_types.py b/sqlglot/optimizer/annotate_types.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/annotate_types.py
++++ b/sqlglot/optimizer/annotate_types.py
+@@ -603,7 +603,7 @@
+                 if expr.type is None or expr.is_type(exp.DType.UNKNOWN):
+                     return
+                 expr.meta.pop("dot_parts", None)
+-            return
++            pass
+ 
+         parent = expr.parent
+         for part in dot_parts:

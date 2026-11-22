@@ -1,0 +1,925 @@
+{
+ "h0bb": {
+  "files": [
+   "sqlglot/generators/dax.py"
+  ],
+  "kind": "comment"
+ },
+ "h0s6": {
+  "files": [
+   "sqlglot/dialects/hive.py"
+  ],
+  "kind": "comment"
+ },
+ "h0sg": {
+  "files": [
+   "sqlglot/optimizer/merge_subqueries.py"
+  ],
+  "kind": "code"
+ },
+ "h16x": {
+  "files": [
+   "sqlglot/expressions/json.py"
+  ],
+  "kind": "comment"
+ },
+ "h17f": {
+  "files": [
+   "sqlglot/optimizer/helpers.py",
+   "sqlglot/typing/duckdb.py",
+   "tests/fixtures/optimizer/qualify_columns.sql"
+  ],
+  "kind": "multi"
+ },
+ "h1c3": {
+  "files": [
+   "sqlglot/dialects/presto.py"
+  ],
+  "kind": "code"
+ },
+ "h1jr": {
+  "files": [
+   "tests/fixtures/pretty.sql"
+  ],
+  "kind": "fixture"
+ },
+ "h1l5": {
+  "files": [
+   "sqlglot/dialects/snowflake.py",
+   "tests/fixtures/optimizer/eliminate_subqueries.sql"
+  ],
+  "kind": "multi"
+ },
+ "h1w7": {
+  "files": [
+   "sqlglot/expressions/functions.py"
+  ],
+  "kind": "code"
+ },
+ "h1xj": {
+  "files": [
+   "sqlglot/dialects/__init__.py",
+   "sqlglot/executor/python.py",
+   "tests/fixtures/optimizer/unnest_subqueries.sql"
+  ],
+  "kind": "multi"
+ },
+ "h28i": {
+  "files": [
+   "sqlglot/dialects/duckdb.py"
+  ],
+  "kind": "code"
+ },
+ "h2i2": {
+  "files": [
+   "sqlglot/optimizer/resolver.py"
+  ],
+  "kind": "code"
+ },
+ "h2o7": {
+  "files": [
+   "sqlglot/parsers/dremio.py"
+  ],
+  "kind": "code"
+ },
+ "h3ba": {
+  "files": [
+   "sqlglot/dialects/presto.py"
+  ],
+  "kind": "code"
+ },
+ "h3eo": {
+  "files": [
+   "sqlglot/optimizer/normalize.py"
+  ],
+  "kind": "code"
+ },
+ "h42c": {
+  "files": [
+   "tests/fixtures/optimizer/unnest_subqueries.sql"
+  ],
+  "kind": "fixture"
+ },
+ "h4q2": {
+  "files": [
+   "tests/fixtures/optimizer/annotate_types.sql"
+  ],
+  "kind": "fixture"
+ },
+ "h4vb": {
+  "files": [
+   "sqlglot/typing/spark2.py"
+  ],
+  "kind": "comment"
+ },
+ "h52m": {
+  "files": [
+   "sqlglot/dialects/solr.py"
+  ],
+  "kind": "code"
+ },
+ "h566": {
+  "files": [
+   "sqlglot/typing/clickhouse.py"
+  ],
+  "kind": "code"
+ },
+ "h5bp": {
+  "files": [
+   "tests/fixtures/pretty.sql"
+  ],
+  "kind": "fixture"
+ },
+ "h5hr": {
+  "files": [
+   "sqlglot/expressions/core.py"
+  ],
+  "kind": "code"
+ },
+ "h5pd": {
+  "files": [
+   "sqlglot/dialects/redshift.py"
+  ],
+  "kind": "code"
+ },
+ "h5rf": {
+  "files": [
+   "tests/fixtures/optimizer/normalize.sql"
+  ],
+  "kind": "fixture"
+ },
+ "h6dl": {
+  "files": [
+   "sqlglot/dialects/singlestore.py"
+  ],
+  "kind": "code"
+ },
+ "h6xc": {
+  "files": [
+   "sqlglot/generators/oracle.py"
+  ],
+  "kind": "code"
+ },
+ "h74c": {
+  "files": [
+   "tests/fixtures/pretty.sql"
+  ],
+  "kind": "fixture"
+ },
+ "h7fe": {
+  "files": [
+   "tests/fixtures/optimizer/merge_subqueries.sql"
+  ],
+  "kind": "fixture"
+ },
+ "h7ln": {
+  "files": [
+   "sqlglot/dialects/starrocks.py"
+  ],
+  "kind": "code"
+ },
+ "h7p1": {
+  "files": [
+   "sqlglot/typing/redshift.py"
+  ],
+  "kind": "code"
+ },
+ "h87z": {
+  "files": [
+   "sqlglot/dialects/sqlite.py"
+  ],
+  "kind": "code"
+ },
+ "h8fd": {
+  "files": [
+   "tests/fixtures/optimizer/canonicalize_internal_names.sql"
+  ],
+  "kind": "fixture"
+ },
+ "h8ft": {
+  "files": [
+   "sqlglot/optimizer/resolver.py"
+  ],
+  "kind": "code"
+ },
+ "h8o2": {
+  "files": [
+   "sqlglot/parsers/tableau.py"
+  ],
+  "kind": "code"
+ },
+ "h8pu": {
+  "files": [
+   "sqlglot/dialects/singlestore.py",
+   "tests/fixtures/identity.sql"
+  ],
+  "kind": "multi"
+ },
+ "h946": {
+  "files": [
+   "sqlglot/parsers/sqlite.py"
+  ],
+  "kind": "code"
+ },
+ "h9kb": {
+  "files": [
+   "tests/fixtures/optimizer/qualify_columns__invalid.sql"
+  ],
+  "kind": "fixture"
+ },
+ "h9va": {
+  "files": [
+   "sqlglot/optimizer/unnest_subqueries.py"
+  ],
+  "kind": "comment"
+ },
+ "ha0i": {
+  "files": [
+   "sqlglot/generators/snowflake.py"
+  ],
+  "kind": "code"
+ },
+ "ha17": {
+  "files": [
+   "tests/fixtures/optimizer/unnest_subqueries.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hb5k": {
+  "files": [
+   "sqlglot/parsers/oracle.py"
+  ],
+  "kind": "comment"
+ },
+ "hb6i": {
+  "files": [
+   "sqlglot/optimizer/annotate_types.py"
+  ],
+  "kind": "code"
+ },
+ "hbi0": {
+  "files": [
+   "sqlglot/generators/singlestore.py"
+  ],
+  "kind": "code"
+ },
+ "hbi9": {
+  "files": [
+   "tests/fixtures/identity.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hbt2": {
+  "files": [
+   "tests/fixtures/optimizer/canonicalize_internal_names.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hbze": {
+  "files": [
+   "sqlglot/parsers/dune.py"
+  ],
+  "kind": "code"
+ },
+ "hcbx": {
+  "files": [
+   "sqlglot/dialects/oracle.py",
+   "sqlglot/executor/python.py",
+   "tests/fixtures/optimizer/pushdown_projections.sql"
+  ],
+  "kind": "multi"
+ },
+ "hcie": {
+  "files": [
+   "tests/fixtures/pretty.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hcnj": {
+  "files": [
+   "sqlglot/optimizer/unnest_subqueries.py"
+  ],
+  "kind": "code"
+ },
+ "hd4z": {
+  "files": [
+   "sqlglot/generators/databricks.py"
+  ],
+  "kind": "code"
+ },
+ "hd95": {
+  "files": [
+   "sqlglot/dialects/dialect.py"
+  ],
+  "kind": "code"
+ },
+ "hdch": {
+  "files": [
+   "sqlglot/parsers/singlestore.py",
+   "tests/fixtures/optimizer/annotate_types.sql"
+  ],
+  "kind": "multi"
+ },
+ "hdfb": {
+  "files": [
+   "sqlglot/optimizer/qualify_columns.py"
+  ],
+  "kind": "code"
+ },
+ "hdht": {
+  "files": [
+   "sqlglot/optimizer/annotate_types.py"
+  ],
+  "kind": "code"
+ },
+ "hdix": {
+  "files": [
+   "sqlglot/expressions/json.py"
+  ],
+  "kind": "code"
+ },
+ "hdq0": {
+  "files": [
+   "tests/fixtures/identity.sql"
+  ],
+  "kind": "fixture"
+ },
+ "heq1": {
+  "files": [
+   "sqlglot/dialects/postgres.py"
+  ],
+  "kind": "code"
+ },
+ "hf06": {
+  "files": [
+   "sqlglot/dialects/doris.py"
+  ],
+  "kind": "code"
+ },
+ "hf0n": {
+  "files": [
+   "tests/fixtures/optimizer/optimize_joins.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hf5d": {
+  "files": [
+   "sqlglot/dialects/trino.py"
+  ],
+  "kind": "comment"
+ },
+ "hfbg": {
+  "files": [
+   "sqlglot/generators/snowflake.py"
+  ],
+  "kind": "comment"
+ },
+ "hfc3": {
+  "files": [
+   "sqlglot/optimizer/simplify.py"
+  ],
+  "kind": "comment"
+ },
+ "hfdu": {
+  "files": [
+   "sqlglot/generators/bigquery.py",
+   "sqlglot/generators/python.py",
+   "tests/fixtures/optimizer/qualify_columns_ddl.sql"
+  ],
+  "kind": "multi"
+ },
+ "hfq2": {
+  "files": [
+   "sqlglot/generators/sqlite.py",
+   "sqlglot/optimizer/isolate_table_selects.py",
+   "tests/fixtures/pretty.sql"
+  ],
+  "kind": "multi"
+ },
+ "hfwe": {
+  "files": [
+   "tests/fixtures/pretty.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hfwy": {
+  "files": [
+   "sqlglot/parsers/tsql.py"
+  ],
+  "kind": "code"
+ },
+ "hfx3": {
+  "files": [
+   "sqlglot/generators/databricks.py"
+  ],
+  "kind": "code"
+ },
+ "hgsu": {
+  "files": [
+   "sqlglot/dialects/__init__.py"
+  ],
+  "kind": "code"
+ },
+ "hgv7": {
+  "files": [
+   "tests/fixtures/optimizer/qualify_columns__with_invisible.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hgz6": {
+  "files": [
+   "tests/fixtures/optimizer/canonicalize_internal_names.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hgz8": {
+  "files": [
+   "tests/fixtures/optimizer/tpc-h/tpc-h.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hh9s": {
+  "files": [
+   "sqlglot/_typing.py"
+  ],
+  "kind": "code"
+ },
+ "hhgy": {
+  "files": [
+   "sqlglot/optimizer/optimizer.py"
+  ],
+  "kind": "code"
+ },
+ "hhhh": {
+  "files": [
+   "sqlglot/parsers/clickhouse.py"
+  ],
+  "kind": "code"
+ },
+ "hhps": {
+  "files": [
+   "sqlglot/generators/duckdb.py"
+  ],
+  "kind": "code"
+ },
+ "hhx9": {
+  "files": [
+   "sqlglot/generators/hive.py"
+  ],
+  "kind": "code"
+ },
+ "hibf": {
+  "files": [
+   "tests/fixtures/optimizer/tpc-h/tpc-h.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hild": {
+  "files": [
+   "tests/fixtures/optimizer/normalize.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hili": {
+  "files": [
+   "sqlglot/parsers/base.py"
+  ],
+  "kind": "code"
+ },
+ "hinz": {
+  "files": [
+   "tests/fixtures/optimizer/qualify_columns__invalid.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hirs": {
+  "files": [
+   "sqlglot/optimizer/canonicalize_internal_names.py",
+   "sqlglot/serde.py",
+   "tests/fixtures/optimizer/tpc-ds/tpc-ds.sql"
+  ],
+  "kind": "multi"
+ },
+ "hiud": {
+  "files": [
+   "sqlglot/parsers/bigquery.py"
+  ],
+  "kind": "code"
+ },
+ "hiwr": {
+  "files": [
+   "tests/fixtures/partial.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hj9b": {
+  "files": [
+   "sqlglot/optimizer/eliminate_subqueries.py"
+  ],
+  "kind": "code"
+ },
+ "hjb3": {
+  "files": [
+   "sqlglot/dialects/postgres.py"
+  ],
+  "kind": "code"
+ },
+ "hjcw": {
+  "files": [
+   "sqlglot/expressions/string.py",
+   "sqlglot/parsers/snowflake.py",
+   "tests/fixtures/optimizer/simplify.sql"
+  ],
+  "kind": "multi"
+ },
+ "hjfn": {
+  "files": [
+   "sqlglot/typing/snowflake.py"
+  ],
+  "kind": "code"
+ },
+ "hjht": {
+  "files": [
+   "sqlglot/dialects/doris.py"
+  ],
+  "kind": "code"
+ },
+ "hjli": {
+  "files": [
+   "sqlglot/expressions/array.py"
+  ],
+  "kind": "code"
+ },
+ "hkff": {
+  "files": [
+   "sqlglot/helper.py"
+  ],
+  "kind": "code"
+ },
+ "hkh6": {
+  "files": [
+   "sqlglot/optimizer/optimize_joins.py"
+  ],
+  "kind": "code"
+ },
+ "hkh8": {
+  "files": [
+   "sqlglot/transforms.py"
+  ],
+  "kind": "code"
+ },
+ "hkhe": {
+  "files": [
+   "sqlglot/generators/trino.py"
+  ],
+  "kind": "comment"
+ },
+ "hkq7": {
+  "files": [
+   "sqlglot/dialects/oracle.py"
+  ],
+  "kind": "code"
+ },
+ "hku6": {
+  "files": [
+   "sqlglot/dialects/spark.py"
+  ],
+  "kind": "code"
+ },
+ "hkx7": {
+  "files": [
+   "tests/fixtures/optimizer/optimizer.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hkxh": {
+  "files": [
+   "sqlglot/serde.py"
+  ],
+  "kind": "code"
+ },
+ "hkyw": {
+  "files": [
+   "sqlglot/parsers/postgres.py"
+  ],
+  "kind": "code"
+ },
+ "hkz6": {
+  "files": [
+   "sqlglot/generators/dax.py"
+  ],
+  "kind": "code"
+ },
+ "hl9b": {
+  "files": [
+   "sqlglot/typing/spark2.py"
+  ],
+  "kind": "code"
+ },
+ "hlqr": {
+  "files": [
+   "tests/fixtures/optimizer/eliminate_subqueries.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hlqu": {
+  "files": [
+   "sqlglot/parsers/postgres.py"
+  ],
+  "kind": "code"
+ },
+ "hm51": {
+  "files": [
+   "sqlglot/parsers/risingwave.py"
+  ],
+  "kind": "code"
+ },
+ "hm6g": {
+  "files": [
+   "tests/fixtures/optimizer/normalize_identifiers.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hm8b": {
+  "files": [
+   "tests/fixtures/optimizer/eliminate_subqueries.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hmb6": {
+  "files": [
+   "tests/fixtures/optimizer/simplify.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hmrk": {
+  "files": [
+   "sqlglot/generators/teradata.py"
+  ],
+  "kind": "code"
+ },
+ "hmrl": {
+  "files": [
+   "sqlglot/dialects/starrocks.py"
+  ],
+  "kind": "code"
+ },
+ "hnny": {
+  "files": [
+   "sqlglot/dialects/athena.py"
+  ],
+  "kind": "comment"
+ },
+ "hnqk": {
+  "files": [
+   "sqlglot/dialects/hive.py"
+  ],
+  "kind": "comment"
+ },
+ "ho0g": {
+  "files": [
+   "sqlglot/parsers/trino.py"
+  ],
+  "kind": "code"
+ },
+ "hobg": {
+  "files": [
+   "sqlglot/generators/tsql.py"
+  ],
+  "kind": "code"
+ },
+ "hofp": {
+  "files": [
+   "sqlglot/parsers/teradata.py"
+  ],
+  "kind": "code"
+ },
+ "hoi8": {
+  "files": [
+   "sqlglot/typing/__init__.py"
+  ],
+  "kind": "code"
+ },
+ "hokk": {
+  "files": [
+   "sqlglot/generators/sqlite.py"
+  ],
+  "kind": "code"
+ },
+ "homh": {
+  "files": [
+   "sqlglot/optimizer/canonicalize_internal_names.py"
+  ],
+  "kind": "code"
+ },
+ "horc": {
+  "files": [
+   "sqlglot/generators/teradata.py"
+  ],
+  "kind": "code"
+ },
+ "hpf8": {
+  "files": [
+   "sqlglot/parsers/redshift.py",
+   "tests/fixtures/pretty.sql"
+  ],
+  "kind": "multi"
+ },
+ "hpfk": {
+  "files": [
+   "sqlglot/lineage.py"
+  ],
+  "kind": "code"
+ },
+ "hpgx": {
+  "files": [
+   "sqlglot/optimizer/scope.py"
+  ],
+  "kind": "code"
+ },
+ "hq9o": {
+  "files": [
+   "sqlglot/optimizer/scope.py"
+  ],
+  "kind": "code"
+ },
+ "hrpn": {
+  "files": [
+   "sqlglot/generators/mysql.py"
+  ],
+  "kind": "code"
+ },
+ "hrpx": {
+  "files": [
+   "tests/fixtures/optimizer/tpc-ds/tpc-ds.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hrz1": {
+  "files": [
+   "tests/fixtures/optimizer/merge_subqueries.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hsla": {
+  "files": [
+   "sqlglot/optimizer/pushdown_projections.py"
+  ],
+  "kind": "code"
+ },
+ "hsml": {
+  "files": [
+   "sqlglot/typing/databricks.py"
+  ],
+  "kind": "code"
+ },
+ "hsuk": {
+  "files": [
+   "sqlglot/schema.py"
+  ],
+  "kind": "code"
+ },
+ "ht5t": {
+  "files": [
+   "sqlglot/optimizer/pushdown_predicates.py",
+   "tests/fixtures/optimizer/simplify.sql"
+  ],
+  "kind": "multi"
+ },
+ "huk0": {
+  "files": [
+   "tests/fixtures/optimizer/pushdown_cte_alias_columns.sql"
+  ],
+  "kind": "fixture"
+ },
+ "huki": {
+  "files": [
+   "sqlglot/optimizer/qualify_tables.py"
+  ],
+  "kind": "code"
+ },
+ "hulj": {
+  "files": [
+   "tests/fixtures/optimizer/eliminate_ctes.sql"
+  ],
+  "kind": "fixture"
+ },
+ "huzu": {
+  "files": [
+   "tests/fixtures/optimizer/normalize_identifiers.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hvpw": {
+  "files": [
+   "sqlglot/parsers/spark.py",
+   "tests/fixtures/optimizer/simplify.sql"
+  ],
+  "kind": "multi"
+ },
+ "hvws": {
+  "files": [
+   "sqlglot/generators/materialize.py"
+  ],
+  "kind": "code"
+ },
+ "hw4y": {
+  "files": [
+   "sqlglot/optimizer/helpers.py"
+  ],
+  "kind": "code"
+ },
+ "hw5p": {
+  "files": [
+   "sqlglot/parsers/presto.py"
+  ],
+  "kind": "comment"
+ },
+ "hwh8": {
+  "files": [
+   "tests/fixtures/optimizer/pushdown_projections.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hwnx": {
+  "files": [
+   "sqlglot/executor/table.py",
+   "sqlglot/generators/materialize.py",
+   "tests/fixtures/optimizer/eliminate_subqueries.sql"
+  ],
+  "kind": "multi"
+ },
+ "hwr9": {
+  "files": [
+   "sqlglot/diff.py"
+  ],
+  "kind": "code"
+ },
+ "hwvh": {
+  "files": [
+   "tests/fixtures/optimizer/normalize_identifiers.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hx76": {
+  "files": [
+   "tests/fixtures/optimizer/pushdown_projections.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hxej": {
+  "files": [
+   "tests/fixtures/optimizer/normalize.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hxud": {
+  "files": [
+   "tests/fixtures/partial.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hy2c": {
+  "files": [
+   "sqlglot/dialects/teradata.py",
+   "tests/fixtures/optimizer/pushdown_cte_alias_columns.sql"
+  ],
+  "kind": "multi"
+ },
+ "hy2v": {
+  "files": [
+   "sqlglot/optimizer/pushdown_projections.py"
+  ],
+  "kind": "code"
+ },
+ "hy8w": {
+  "files": [
+   "sqlglot/optimizer/qualify.py"
+  ],
+  "kind": "comment"
+ },
+ "hyr6": {
+  "files": [
+   "tests/fixtures/optimizer/normalize.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hyu5": {
+  "files": [
+   "tests/fixtures/pretty.sql"
+  ],
+  "kind": "fixture"
+ },
+ "hzpd": {
+  "files": [
+   "sqlglot/generators/dune.py"
+  ],
+  "kind": "code"
+ },
+ "hzyo": {
+  "files": [
+   "sqlglot/expressions/json.py"
+  ],
+  "kind": "comment"
+ }
+}

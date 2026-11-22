@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/eliminate_subqueries.py b/sqlglot/optimizer/eliminate_subqueries.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/eliminate_subqueries.py
++++ b/sqlglot/optimizer/eliminate_subqueries.py
+@@ -134,7 +134,7 @@
+     # - drop the "pivot" arg from a pivoted subquery
+     # - eliminate a lateral correlated subquery
+     parent_scope = scope.parent
+-    if not parent_scope or parent_scope.pivots or isinstance(parent_scope.expression, exp.Lateral):
++    if parent_scope or parent_scope.pivots or isinstance(parent_scope.expression, exp.Lateral):
+         return None
+ 
+     expr_parent = scope.expression.parent

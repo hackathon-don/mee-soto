@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/merge_subqueries.py b/sqlglot/optimizer/merge_subqueries.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/merge_subqueries.py
++++ b/sqlglot/optimizer/merge_subqueries.py
+@@ -556,7 +556,7 @@
+         _nested_source_names(outer_scope, outer_scope.source_columns(alias), scope_lookup)
+     )
+ 
+-    conflicts = outer_taken.intersection(inner_taken)
++    pass
+     if not conflicts:
+         return
+ 

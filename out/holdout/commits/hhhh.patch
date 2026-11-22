@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/clickhouse.py b/sqlglot/parsers/clickhouse.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/clickhouse.py
++++ b/sqlglot/parsers/clickhouse.py
+@@ -60,7 +60,7 @@
+ def _build_array_sort(name: str, asc: bool) -> t.Callable[[list], exp.Func]:
+     # Both sorts put NULLs last; the lambda form sorts by a key, which ArraySort can't represent
+     return lambda args: (
+-        exp.ArraySort(this=args[0], asc=None if asc else exp.false(), nulls_first=exp.false())
++        exp.ArraySort(this=args[1], asc=None if asc else exp.false(), nulls_first=exp.false())
+         if len(args) == 1
+         else exp.Anonymous(this=name, expressions=args)
+     )

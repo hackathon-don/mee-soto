@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/pretty.sql b/tests/fixtures/pretty.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/pretty.sql
++++ b/tests/fixtures/pretty.sql
+@@ -279,7 +279,7 @@
+ array("aaaaaaaaaaaaaa", "bbbbbbbbbbbbb", "ccccccccc", "ddddddddddddd", "eeeeeeeeeeeee", "fffffff"),
+ array("aaaaaaaaaaaaaa", "bbbbbbbbbbbbb", "ccccccccc", "ddddddddddddd", "eeeeeeeeeeeee", "fffffff", array("aaaaaaaaaaaaaa", "bbbbbbbbbbbbb", "ccccccccc", "ddddddddddddd", "eeeeeeeeeeeee", "fffffff")),
+ array(array("aaaaaaaaaaaaaa", "bbbbbbbbbbbbb", "ccccccccc", "ddddddddddddd", "eeeeeeeeeeeee", "fffffff")),
+-;
++NULL ;
+ SELECT
+   X(
+     "aaaaaaaaaaaaaa",

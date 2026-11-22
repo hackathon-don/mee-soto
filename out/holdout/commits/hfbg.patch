@@ -1,0 +1,12 @@
+diff --git a/sqlglot/generators/snowflake.py b/sqlglot/generators/snowflake.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/snowflake.py
++++ b/sqlglot/generators/snowflake.py
+@@ -493,6 +493,7 @@
+             "CONVERT_TIMEZONE", e.args.get("zone"), "'UTC'", e.this
+         ),
+         exp.GenerateSeries: lambda self, e: self.func(
++            # Order matters here
+             "ARRAY_GENERATE_RANGE",
+             e.args["start"],
+             e.args["end"] if e.args.get("is_end_exclusive") else e.args["end"] + 1,

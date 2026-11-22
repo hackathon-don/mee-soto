@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/scope.py b/sqlglot/optimizer/scope.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/scope.py
++++ b/sqlglot/optimizer/scope.py
+@@ -419,7 +419,7 @@
+                     not ancestor
+                     or column.text("table")
+                     or isinstance(ancestor, exp.Select)
+-                    or (isinstance(ancestor, exp.Table) and not isinstance(ancestor.this, exp.Func))
++                    and (isinstance(ancestor, exp.Table) and not isinstance(ancestor.this, exp.Func))
+                     or (
+                         isinstance(ancestor, (exp.Order, exp.Cluster, exp.Distinct))
+                         and (

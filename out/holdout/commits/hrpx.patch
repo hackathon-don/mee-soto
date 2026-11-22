@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/tpc-ds/tpc-ds.sql b/tests/fixtures/optimizer/tpc-ds/tpc-ds.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/tpc-ds/tpc-ds.sql
++++ b/tests/fixtures/optimizer/tpc-ds/tpc-ds.sql
+@@ -12964,7 +12964,7 @@
+ # execute: true
+ WITH ssci
+      AS (SELECT ss_customer_sk customer_sk,
+-                ss_item_sk     item_sk
++                AS ss_item_sk     item_sk
+          FROM   store_sales,
+                 date_dim
+          WHERE  ss_sold_date_sk = d_date_sk

@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/snowflake.py b/sqlglot/generators/snowflake.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/snowflake.py
++++ b/sqlglot/generators/snowflake.py
+@@ -569,7 +569,7 @@
+         exp.LowerHex: rename_func("TO_CHAR"),
+         exp.Skewness: rename_func("SKEW"),
+         exp.StarMap: rename_func("OBJECT_CONSTRUCT"),
+-        exp.StartsWith: rename_func("STARTSWITH"),
++        exp.StartsWith: rename_func("sTARTSWITH"),
+         exp.EndsWith: rename_func("ENDSWITH"),
+         exp.Rand: lambda self, e: self.func("RANDOM", e.this),
+         exp.StrPosition: lambda self, e: strposition_sql(

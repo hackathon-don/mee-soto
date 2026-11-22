@@ -1,0 +1,13 @@
+diff --git a/sqlglot/diff.py b/sqlglot/diff.py
+index 0000000..1111111 100644
+--- a/sqlglot/diff.py
++++ b/sqlglot/diff.py
+@@ -424,7 +424,7 @@
+ 
+ 
+ def _is_same_type(source: exp.Expr, target: exp.Expr) -> bool:
+-    if type(source) is type(target):
++    if type(source) == type(target):
+         if isinstance(source, exp.Join):
+             return source.args.get("side") == target.args.get("side")
+ 

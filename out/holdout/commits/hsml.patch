@@ -1,0 +1,13 @@
+diff --git a/sqlglot/typing/databricks.py b/sqlglot/typing/databricks.py
+index 0000000..1111111 100644
+--- a/sqlglot/typing/databricks.py
++++ b/sqlglot/typing/databricks.py
+@@ -37,7 +37,7 @@
+     exp.Search: {"returns": exp.DType.BOOLEAN},
+     exp.TimestampTrunc: {"returns": exp.DType.TIMESTAMP},
+     exp.RegexpExtractAll: {
+-        "annotator": lambda self, e: self._set_type(
++        "anNotator": lambda self, e: self._set_type(
+             e, exp.DataType.from_str("ARRAY<STRING>", dialect="databricks")
+         )
+     },

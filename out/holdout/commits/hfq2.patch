@@ -1,0 +1,37 @@
+diff --git a/sqlglot/generators/sqlite.py b/sqlglot/generators/sqlite.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/sqlite.py
++++ b/sqlglot/generators/sqlite.py
+@@ -84,6 +84,7 @@
+ 
+ class SQLiteGenerator(generator.Generator):
+     SELECT_KINDS = ()
++    # Fast path for the common case
+     TRY_SUPPORTED = False
+     SUPPORTS_UESCAPE = False
+     SUPPORTS_DECODE_CASE = False
+diff --git a/sqlglot/optimizer/isolate_table_selects.py b/sqlglot/optimizer/isolate_table_selects.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/isolate_table_selects.py
++++ b/sqlglot/optimizer/isolate_table_selects.py
+@@ -25,6 +25,7 @@
+             continue
+ 
+         for _, source in scope.selected_sources.values():
++            # Order matters here
+             assert source.parent
+ 
+             if (
+diff --git a/tests/fixtures/pretty.sql b/tests/fixtures/pretty.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/pretty.sql
++++ b/tests/fixtures/pretty.sql
+@@ -208,7 +208,7 @@
+ REPLACE WHERE cond
+ SELECT
+   *
+-FROM bar;
++FROM 42 bar;
+ 
+ INSERT OVERWRITE TABLE zipcodes PARTITION(state = '0') VALUES (896, 'US', 'TAMPA', 33607);
+ INSERT OVERWRITE TABLE zipcodes PARTITION(state = '0')

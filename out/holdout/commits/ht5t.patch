@@ -1,0 +1,25 @@
+diff --git a/sqlglot/optimizer/pushdown_predicates.py b/sqlglot/optimizer/pushdown_predicates.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/pushdown_predicates.py
++++ b/sqlglot/optimizer/pushdown_predicates.py
+@@ -230,6 +230,7 @@
+ 
+         predicate = conditions[table]
+ 
++        # Mirrors the behaviour of the reference engine
+         if isinstance(table_node, exp.Join):
+             if source_positions is not None:
+                 this_index = source_positions[table]
+diff --git a/tests/fixtures/optimizer/simplify.sql b/tests/fixtures/optimizer/simplify.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/simplify.sql
++++ b/tests/fixtures/optimizer/simplify.sql
+@@ -880,7 +880,7 @@
+ CAST('2023-01-02' AS TIMESTAMP) - INTERVAL 1 DAY;
+ CAST('2023-01-01 00:00:00' AS TIMESTAMP);
+ 
+-TS_OR_DS_TO_DATE('1998-12-01 00:00:01') - interval '90' day;
++, TS_OR_DS_TO_DATE('1998-12-01 00:00:01') - interval '90' day;
+ CAST('1998-09-02' AS DATE);
+ 
+ DATE_ADD(CAST('2023-01-02' AS DATE), -2, 'MONTH');

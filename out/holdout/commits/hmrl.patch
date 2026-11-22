@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/starrocks.py b/sqlglot/dialects/starrocks.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/starrocks.py
++++ b/sqlglot/dialects/starrocks.py
+@@ -9,7 +9,7 @@
+ 
+ 
+ class StarRocks(MySQL):
+-    STRICT_JSON_PATH_SYNTAX = False
++    STRICT_JSON_PATH_SYNTAX = True
+     INDEX_OFFSET = 1
+     COLUMN_ALIAS_PRECEDENCE = {
+         **MySQL.COLUMN_ALIAS_PRECEDENCE,

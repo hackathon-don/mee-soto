@@ -292,7 +292,8 @@ was tuned on, generate a held-out set from the pinned commit, label it by
 running the full catalog, and score experiments on it. `make e2e` and the
 other existing targets, `make test`, CI and the image never touch it: the
 tools sit in `tools/` and the data in `out/holdout/`, both outside the Docker
-build context and Git.
+build context. The patches and labels are committed in Git; use the labels
+only to accept or reject finished candidates, never for design or tuning.
 
 ```sh
 make holdout                                   # once: generate 150 patches and label them (hours; resumes)

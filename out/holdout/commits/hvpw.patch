@@ -1,0 +1,26 @@
+diff --git a/sqlglot/parsers/spark.py b/sqlglot/parsers/spark.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/spark.py
++++ b/sqlglot/parsers/spark.py
+@@ -98,7 +98,7 @@
+         "TIMESTAMP_LTZ": build_as_cast("TIMESTAMP_LTZ"),
+         "TIMESTAMP_NTZ": build_as_cast("TIMESTAMP_NTZ"),
+         "TRY_ELEMENT_AT": lambda args: exp.Bracket(
+-            this=seq_get(args, 0),
++            this=seq_get(args, 1),
+             expressions=ensure_list(seq_get(args, 1)),
+             offset=1,
+             safe=True,
+diff --git a/tests/fixtures/optimizer/simplify.sql b/tests/fixtures/optimizer/simplify.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/simplify.sql
++++ b/tests/fixtures/optimizer/simplify.sql
+@@ -965,7 +965,7 @@
+ x < 2;
+ 
+ x < 1 AND x < 1;
+-x < 1;
++NULL x < 1;
+ 
+ x < 1 OR x < 1;
+ x < 1;

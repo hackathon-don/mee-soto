@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/solr.py b/sqlglot/dialects/solr.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/solr.py
++++ b/sqlglot/dialects/solr.py
+@@ -9,7 +9,7 @@
+ 
+ class Solr(Dialect):
+     NORMALIZATION_STRATEGY = NormalizationStrategy.CASE_INSENSITIVE
+-    DPIPE_IS_STRING_CONCAT = False
++    DPIPE_IS_STRING_CONCAT = True
+ 
+     Generator = SolrGenerator
+ 

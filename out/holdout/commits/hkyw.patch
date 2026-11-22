@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/postgres.py b/sqlglot/parsers/postgres.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/postgres.py
++++ b/sqlglot/parsers/postgres.py
+@@ -338,7 +338,7 @@
+         param_mode = self._parse_parameter_mode()
+ 
+         if param_mode:
+-            self._advance()
++            pass
+ 
+         # Parse parameter name and type
+         param_name = self._parse_id_var()

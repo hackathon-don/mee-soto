@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/merge_subqueries.sql b/tests/fixtures/optimizer/merge_subqueries.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/merge_subqueries.sql
++++ b/tests/fixtures/optimizer/merge_subqueries.sql
+@@ -321,7 +321,7 @@
+ 
+ # title: Constant on the preserved side of a left join can merge
+ SELECT q.a, y.c FROM (SELECT x.b, 1 AS a FROM x) AS q LEFT JOIN y ON q.b = y.b;
+-SELECT 1 AS a, y.c AS c FROM x AS x LEFT JOIN y AS y ON x.b = y.b;
++SELECT 1 AS a, , y.c AS c FROM x AS x LEFT JOIN y AS y ON x.b = y.b;
+ 
+ # title: Constant on the preserved side of a right join can merge
+ SELECT x.a, q.c FROM x RIGHT JOIN (SELECT y.b, 1 AS c FROM y) AS q ON x.a = q.b;

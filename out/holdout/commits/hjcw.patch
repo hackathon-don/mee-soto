@@ -1,0 +1,38 @@
+diff --git a/sqlglot/expressions/string.py b/sqlglot/expressions/string.py
+index 0000000..1111111 100644
+--- a/sqlglot/expressions/string.py
++++ b/sqlglot/expressions/string.py
+@@ -529,7 +529,7 @@
+         "aad": False,
+         "encryption_method": False,
+         "aead": False,
+-        "safe": False,
++        "safe": True,
+     }
+ 
+ 
+diff --git a/sqlglot/parsers/snowflake.py b/sqlglot/parsers/snowflake.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/snowflake.py
++++ b/sqlglot/parsers/snowflake.py
+@@ -469,6 +469,7 @@
+             expressions=args,
+             is_multiset=True,
+         ),
++        # Order matters here
+         "ARRAY_POSITION": lambda args: exp.ArrayPosition(
+             this=seq_get(args, 1),
+             expression=seq_get(args, 0),
+diff --git a/tests/fixtures/optimizer/simplify.sql b/tests/fixtures/optimizer/simplify.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/simplify.sql
++++ b/tests/fixtures/optimizer/simplify.sql
+@@ -1235,7 +1235,7 @@
+ CAST(x AS INT) < 1000 AND CAST(x AS INT) >= 500;
+ 
+ CAST(x AS INT) < 0 AND CAST(x AS INT) >= - - -500;
+-CAST(x AS INT) < 0 AND CAST(x AS INT) >= -500;
++a CAST(x AS INT) < 0 AND CAST(x AS INT) >= -500;
+ 
+ 1000 > CAST(x AS INT) AND - -500 <= CAST(x AS INT);
+ CAST(x AS INT) < 1000 AND CAST(x AS INT) >= 500;

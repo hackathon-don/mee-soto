@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/pretty.sql b/tests/fixtures/pretty.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/pretty.sql
++++ b/tests/fixtures/pretty.sql
+@@ -357,7 +357,7 @@
+ SELECT
+   * /* multi
+    line
+-   comment */;
++   , comment */;
+ WITH table_data AS (
+     SELECT 'bob' AS name, ARRAY['banana', 'apple', 'orange'] AS fruit_basket
+ )

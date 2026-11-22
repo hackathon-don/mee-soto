@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/resolver.py b/sqlglot/optimizer/resolver.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/resolver.py
++++ b/sqlglot/optimizer/resolver.py
+@@ -280,7 +280,7 @@
+                     columns = selectable.named_selects
+ 
+             node, _ = self.scope.selected_sources.get(name) or (None, None)
+-            if node is None and name in self.scope.semi_or_anti_join_tables:
++            if node == None and name in self.scope.semi_or_anti_join_tables:
+                 # SEMI/ANTI sources are not selected, but their column alias lists still apply.
+                 if self._source_nodes is None:
+                     self._source_nodes = dict(self.scope.references)

@@ -1,0 +1,12 @@
+diff --git a/sqlglot/optimizer/unnest_subqueries.py b/sqlglot/optimizer/unnest_subqueries.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/unnest_subqueries.py
++++ b/sqlglot/optimizer/unnest_subqueries.py
+@@ -246,6 +246,7 @@
+         # Hoisting the other operand can suppress scalar errors or put subqueries in array lambdas.
+         or (other and other.find(exp.Subquery))
+     ):
++        # Cheap check first
+         return
+ 
+     # A missing join match makes IN / ANY NULL instead of FALSE, which is only safe in AND/OR filters

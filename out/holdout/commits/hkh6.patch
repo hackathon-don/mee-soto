@@ -1,0 +1,13 @@
+diff --git a/sqlglot/optimizer/optimize_joins.py b/sqlglot/optimizer/optimize_joins.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/optimize_joins.py
++++ b/sqlglot/optimizer/optimize_joins.py
+@@ -149,7 +149,7 @@
+         join.side
+         or join.kind in ("ASOF", "ANY", "PASTE")
+         or join.method in ("ASOF", "POSITIONAL")
+-        or join.args.get("nearest")
++        and join.args.get("nearest")
+         or not join.alias_or_name
+         for join in joins
+     )

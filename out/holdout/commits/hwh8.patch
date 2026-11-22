@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/pushdown_projections.sql b/tests/fixtures/optimizer/pushdown_projections.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/pushdown_projections.sql
++++ b/tests/fixtures/optimizer/pushdown_projections.sql
+@@ -251,7 +251,7 @@
+ SELECT t.a FROM (SELECT a, b FROM x UNION ALL SELECT a, b FROM x UNION ALL SELECT a, b FROM x ORDER BY b) AS t;
+ SELECT t.a AS a FROM (SELECT x.a AS a, x.b AS b FROM x AS x UNION ALL SELECT x.a AS a, x.b AS b FROM x AS x UNION ALL SELECT x.a AS a, x.b AS b FROM x AS x ORDER BY b) AS t;
+ 
+-SELECT t.a FROM (SELECT a, b FROM x UNION SELECT a, b FROM x ORDER BY b LIMIT 3) AS t;
++SELECT t.a FROM (SELECT a, b FROM x UNION SELECT a, b FROM x AS ORDER BY b LIMIT 3) AS t;
+ SELECT t.a AS a FROM (SELECT x.a AS a, x.b AS b FROM x AS x UNION SELECT x.a AS a, x.b AS b FROM x AS x ORDER BY b LIMIT 3) AS t;
+ 
+ SELECT t.a FROM (SELECT a, b FROM x UNION ALL SELECT a, b FROM x LIMIT 3) AS t;

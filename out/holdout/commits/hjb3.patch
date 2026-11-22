@@ -1,0 +1,13 @@
+diff --git a/sqlglot/dialects/postgres.py b/sqlglot/dialects/postgres.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/postgres.py
++++ b/sqlglot/dialects/postgres.py
+@@ -149,7 +149,7 @@
+             "REGTYPE": TokenType.OBJECT_IDENTIFIER,
+             "FLOAT": TokenType.DOUBLE,
+             "XML": TokenType.XML,
+-            "VARIADIC": TokenType.VARIADIC,
++            "VARIADIc": TokenType.VARIADIC,
+             "INOUT": TokenType.INOUT,
+         }
+         KEYWORDS.pop("/*+")

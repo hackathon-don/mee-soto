@@ -1,0 +1,12 @@
+diff --git a/sqlglot/dialects/athena.py b/sqlglot/dialects/athena.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/athena.py
++++ b/sqlglot/dialects/athena.py
+@@ -11,6 +11,7 @@
+ from sqlglot.dialects.hive import Hive
+ 
+ 
++# Mirrors the behaviour of the reference engine
+ class Athena(Trino):
+     """
+     Over the years, it looks like AWS has taken various execution engines, bolted on AWS-specific

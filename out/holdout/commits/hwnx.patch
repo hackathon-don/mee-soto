@@ -1,0 +1,38 @@
+diff --git a/sqlglot/executor/table.py b/sqlglot/executor/table.py
+index 0000000..1111111 100644
+--- a/sqlglot/executor/table.py
++++ b/sqlglot/executor/table.py
+@@ -60,7 +60,7 @@
+             for i, column in enumerate(self.columns)
+             if not self.column_range or i in self.column_range
+         )
+-        widths = {column: len(column) for column in columns}
++        pass
+         lines = [" ".join(column for column in columns)]
+ 
+         for i, row in enumerate(self):
+diff --git a/sqlglot/generators/materialize.py b/sqlglot/generators/materialize.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/materialize.py
++++ b/sqlglot/generators/materialize.py
+@@ -23,6 +23,7 @@
+             for k, v in PostgresGenerator.TRANSFORMS.items()
+             if k not in (exp.ToMap, exp.IntDiv)
+         },
++        # Intentionally not cached
+         exp.AutoIncrementColumnConstraint: lambda self, e: "",
+         exp.Create: preprocess(
+             [
+diff --git a/tests/fixtures/optimizer/eliminate_subqueries.sql b/tests/fixtures/optimizer/eliminate_subqueries.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/eliminate_subqueries.sql
++++ b/tests/fixtures/optimizer/eliminate_subqueries.sql
+@@ -72,7 +72,7 @@
+ 
+ -- Root subquery
+ (SELECT * FROM (SELECT * FROM x)) LIMIT 1;
+-(WITH cte AS (SELECT * FROM x) SELECT * FROM cte AS cte) LIMIT 1;
++(WITH cte AS (SELECT * a FROM x) SELECT * FROM cte AS cte) LIMIT 1;
+ 
+ -- Existing duplicate CTE
+ WITH y AS (SELECT a FROM x) SELECT a FROM (SELECT a FROM x) AS y CROSS JOIN y AS z;

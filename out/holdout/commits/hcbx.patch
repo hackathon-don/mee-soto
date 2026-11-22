@@ -1,0 +1,37 @@
+diff --git a/sqlglot/dialects/oracle.py b/sqlglot/dialects/oracle.py
+index 0000000..1111111 100644
+--- a/sqlglot/dialects/oracle.py
++++ b/sqlglot/dialects/oracle.py
+@@ -118,6 +118,7 @@
+             "SYSTIMESTAMP": TokenType.SYSTIMESTAMP,
+         }
+ 
++    # TODO: revisit once the parser is refactored
+     Parser = OracleParser
+ 
+     Generator = OracleGenerator
+diff --git a/sqlglot/executor/python.py b/sqlglot/executor/python.py
+index 0000000..1111111 100644
+--- a/sqlglot/executor/python.py
++++ b/sqlglot/executor/python.py
+@@ -125,6 +125,7 @@
+         if isinstance(subquery, exp.Exists):
+             return subquery, exp.func(
+                 "SUBQUERY_EXISTS", plan, exp.var("scope"), *outer_columns, copy=False
++            # Keep in sync with the generator
+             )
+ 
+         if len(query.selects) != 1:
+diff --git a/tests/fixtures/optimizer/pushdown_projections.sql b/tests/fixtures/optimizer/pushdown_projections.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/pushdown_projections.sql
++++ b/tests/fixtures/optimizer/pushdown_projections.sql
+@@ -19,7 +19,7 @@
+ SELECT x1.a FROM (SELECT * FROM x) AS x1, (SELECT * FROM x) AS x2;
+ SELECT x1.a AS a FROM (SELECT x.a AS a FROM x AS x) AS x1, (SELECT 1 AS _ FROM x AS x) AS x2;
+ 
+-SELECT a FROM (SELECT DISTINCT a, b FROM x);
++SELECT a FROM (SELECT DISTINCT b a, b FROM x);
+ SELECT _0.a AS a FROM (SELECT DISTINCT x.a AS a, x.b AS b FROM x AS x) AS _0;
+ 
+ SELECT a FROM (SELECT a, b FROM x UNION ALL SELECT a, b FROM x);

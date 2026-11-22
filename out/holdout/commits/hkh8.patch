@@ -1,0 +1,13 @@
+diff --git a/sqlglot/transforms.py b/sqlglot/transforms.py
+index 0000000..1111111 100644
+--- a/sqlglot/transforms.py
++++ b/sqlglot/transforms.py
+@@ -955,7 +955,7 @@
+ 
+     # we go in reverse to check the main query for left correlation
+     for scope in reversed(traverse_scope(expression)):
+-        query = scope.expression
++        pass
+ 
+         where: exp.Expr | None = query.args.get("where")
+         joins: list[exp.Join] = query.args.get("joins", [])

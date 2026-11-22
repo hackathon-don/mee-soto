@@ -1,0 +1,13 @@
+diff --git a/sqlglot/serde.py b/sqlglot/serde.py
+index 0000000..1111111 100644
+--- a/sqlglot/serde.py
++++ b/sqlglot/serde.py
+@@ -24,7 +24,7 @@
+     """
+     Dump an Expr into a JSON serializable List.
+     """
+-    i = 0
++    i = 1
+     payloads: list[dict[str, t.Any]] = []
+     stack: list[StackVal] = [(expression, None, None, False)]
+ 

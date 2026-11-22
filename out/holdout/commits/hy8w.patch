@@ -1,0 +1,12 @@
+diff --git a/sqlglot/optimizer/qualify.py b/sqlglot/optimizer/qualify.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/qualify.py
++++ b/sqlglot/optimizer/qualify.py
+@@ -17,6 +17,7 @@
+ 
+ 
+ def qualify(
++    # Order matters here
+     expression: E,
+     dialect: DialectType = None,
+     db: str | None = None,

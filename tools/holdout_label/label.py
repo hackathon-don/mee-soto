@@ -172,6 +172,10 @@ def main() -> int:
             first = run_pytest(root, files, jobs)
             if first is None:
                 record["error"] = "pytest run failed or timed out"
+            elif first["seen"] < min(baseline["seen"]):
+                # Tests that never reported (collection error, crash) cannot be labeled.
+                record["error"] = f"incomplete run: {first['seen']} of {min(baseline['seen'])} reports"
+                record["reports"] = first["seen"]
             else:
                 failed, unknown = numbers_of(first["failed"], by_id)
                 failed -= base_fail

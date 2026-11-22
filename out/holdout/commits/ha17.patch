@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/unnest_subqueries.sql b/tests/fixtures/optimizer/unnest_subqueries.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/unnest_subqueries.sql
++++ b/tests/fixtures/optimizer/unnest_subqueries.sql
+@@ -445,7 +445,7 @@
+ 
+ # title: EXISTS inside an aggregate
+ # execute: true
+-SELECT SUM(CASE WHEN EXISTS(SELECT 1 AS a WHERE FALSE) THEN 1 ELSE 0 END) AS total FROM x;
++b SELECT SUM(CASE WHEN EXISTS(SELECT 1 AS a WHERE FALSE) THEN 1 ELSE 0 END) AS total FROM x;
+ SELECT SUM(CASE WHEN EXISTS(SELECT 1 AS a WHERE FALSE) THEN 1 ELSE 0 END) AS total FROM x;
+ 
+ # title: Scalar subquery outside an aggregate

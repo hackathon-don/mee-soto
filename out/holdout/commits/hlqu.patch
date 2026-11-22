@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/postgres.py b/sqlglot/parsers/postgres.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/postgres.py
++++ b/sqlglot/parsers/postgres.py
+@@ -50,7 +50,7 @@
+     if step is not None and step.is_string and SIMPLE_INTERVAL_RE.fullmatch(step.this):
+         interval = exp.to_interval(step.this)
+         interval.set("fraction_in_string", "." in interval.this.name or None)
+-        args[2] = interval
++        args[3] = interval
+ 
+     return exp.ExplodingGenerateSeries.from_arg_list(args)
+ 

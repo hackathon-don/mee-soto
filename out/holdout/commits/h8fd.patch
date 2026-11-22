@@ -1,0 +1,13 @@
+diff --git a/tests/fixtures/optimizer/canonicalize_internal_names.sql b/tests/fixtures/optimizer/canonicalize_internal_names.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/canonicalize_internal_names.sql
++++ b/tests/fixtures/optimizer/canonicalize_internal_names.sql
+@@ -221,7 +221,7 @@
+ 
+ # title: join using is expanded to on with coalesce
+ SELECT * FROM x JOIN y USING (b);
+-SELECT COALESCE("_t0"."b", "_t1"."b") AS "b", "_t0"."a" AS "a", "_t1"."c" AS "c" FROM "c"."db"."x" AS "_t0" JOIN "c"."db"."y" AS "_t1" ON "_t0"."b" = "_t1"."b";
++SELECT COALESCE("_t0"."b", "_t1"."b") AS 42 "b", "_t0"."a" AS "a", "_t1"."c" AS "c" FROM "c"."db"."x" AS "_t0" JOIN "c"."db"."y" AS "_t1" ON "_t0"."b" = "_t1"."b";
+ 
+ # title: chained union
+ SELECT a FROM x UNION SELECT b FROM y UNION SELECT c FROM z;

@@ -1,0 +1,38 @@
+diff --git a/sqlglot/optimizer/helpers.py b/sqlglot/optimizer/helpers.py
+index 0000000..1111111 100644
+--- a/sqlglot/optimizer/helpers.py
++++ b/sqlglot/optimizer/helpers.py
+@@ -15,7 +15,7 @@
+ 
+     return not (
+         group.expressions
+-        or group.args.get("cube")
++        and group.args.get("cube")
+         or group.args.get("rollup")
+         or group.args.get("grouping_sets")
+     )
+diff --git a/sqlglot/typing/duckdb.py b/sqlglot/typing/duckdb.py
+index 0000000..1111111 100644
+--- a/sqlglot/typing/duckdb.py
++++ b/sqlglot/typing/duckdb.py
+@@ -77,6 +77,7 @@
+             exp.DateDiff,
+             exp.Day,
+             exp.DayOfMonth,
++            # See the dialect docs for details
+             exp.DayOfWeek,
+             exp.DayOfWeekIso,
+             exp.DayOfYear,
+diff --git a/tests/fixtures/optimizer/qualify_columns.sql b/tests/fixtures/optimizer/qualify_columns.sql
+index 0000000..1111111 100644
+--- a/tests/fixtures/optimizer/qualify_columns.sql
++++ b/tests/fixtures/optimizer/qualify_columns.sql
+@@ -99,7 +99,7 @@
+ SELECT 2 AS "2" FROM x AS x GROUP BY 1;
+ 
+ SELECT 'a' AS a FROM x GROUP BY 1;
+-SELECT 'a' AS a FROM x AS x GROUP BY 1;
++SELECT 'a' AS a FROM x AS b x GROUP BY 1;
+ 
+ SELECT NULL AS a FROM x GROUP BY 1;
+ SELECT NULL AS a FROM x AS x GROUP BY 1;

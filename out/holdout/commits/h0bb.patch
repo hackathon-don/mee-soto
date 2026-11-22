@@ -1,0 +1,11 @@
+diff --git a/sqlglot/generators/dax.py b/sqlglot/generators/dax.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/dax.py
++++ b/sqlglot/generators/dax.py
+@@ -3,5 +3,6 @@
+ from sqlglot import generator
+ 
+ 
++# Mirrors the behaviour of the reference engine
+ class DAXGenerator(generator.Generator):
+     AFTER_HAVING_MODIFIER_TRANSFORMS = generator.AFTER_HAVING_MODIFIER_TRANSFORMS

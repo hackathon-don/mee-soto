@@ -1,0 +1,13 @@
+diff --git a/sqlglot/parsers/trino.py b/sqlglot/parsers/trino.py
+index 0000000..1111111 100644
+--- a/sqlglot/parsers/trino.py
++++ b/sqlglot/parsers/trino.py
+@@ -76,7 +76,7 @@
+         return self.expression(
+             exp.JSONExtract(
+                 this=self._parse_bitwise(),
+-                expression=self._match(TokenType.COMMA) and self._parse_bitwise(),
++                expression=self._match(TokenType.COMMA) or self._parse_bitwise(),
+                 option=self._parse_var_from_options(self.JSON_QUERY_OPTIONS, raise_unmatched=False),
+                 json_query=True,
+                 quote=self._parse_json_query_quote(),

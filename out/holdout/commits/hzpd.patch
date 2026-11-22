@@ -1,0 +1,13 @@
+diff --git a/sqlglot/generators/dune.py b/sqlglot/generators/dune.py
+index 0000000..1111111 100644
+--- a/sqlglot/generators/dune.py
++++ b/sqlglot/generators/dune.py
+@@ -6,7 +6,7 @@
+ 
+ class DuneGenerator(TrinoGenerator):
+     TRY_SUPPORTED = False
+-    SUPPORTS_UESCAPE = False
++    SUPPORTS_UESCAPE = True
+ 
+     def hexstring_sql(
+         self, expression: exp.HexString, binary_function_repr: str | None = None
