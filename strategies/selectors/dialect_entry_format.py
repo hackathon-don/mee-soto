@@ -7,7 +7,7 @@ import sys
 from .map_format import SOURCE
 
 TABLES = {"NUMERIC_ESCAPES", "SHOW_PARSERS"}
-TRACE_VERSION = 1
+TRACE_VERSION = 2
 
 
 def trace_identity():

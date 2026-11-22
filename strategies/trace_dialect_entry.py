@@ -1,13 +1,18 @@
 """Trace one catalog test in an otherwise fresh interpreter."""
 
 import ast
+import atexit
 import importlib.abc
 import importlib.machinery
+from itertools import count
 import json
+from multiprocessing import spawn
+from multiprocessing.context import SpawnProcess
 from multiprocessing.process import BaseProcess
 import os
 from pathlib import Path
 import sys
+from threading import local
 
 from strategies.selectors.dialect_entry_format import dialect_table_path, table_assignments
 
@@ -23,6 +28,27 @@ class Recorder(importlib.abc.MetaPathFinder):
         self.raw_files = set()
         self.loading = None
         self.unknown = False
+
+    def install(self):
+        if any(name == "sqlglot" or name.startswith("sqlglot.") for name in sys.modules):
+            untraced_process()
+        sys.path.insert(0, str(self.root))
+        sys.meta_path.insert(0, self)
+        sys.addaudithook(self.audit)
+
+    def merge(self, report):
+        self.raw_files.update(report["raw_files"])
+        for path, name, whole, keys in report["tables"]:
+            row = self.tables.setdefault((path, name), [False, set()])
+            row[0] |= whole
+            row[1].update(keys)
+
+    def report(self):
+        return {
+            "tables": [[path, name, whole, sorted(keys)]
+                       for (path, name), (whole, keys) in self.tables.items()],
+            "raw_files": sorted(self.raw_files),
+        }
 
     def audit(self, event, args):
         if event in ("subprocess.Popen", "os.fork", "os.forkpty", "os.posix_spawn",
@@ -122,13 +148,88 @@ for _name in (
     setattr(ObservedDict, _name, _observe_whole(getattr(dict, _name)))
 
 
+class SpawnWorkers:
+    def __init__(self, root, result):
+        self.root = root
+        self.result = result
+        self.expected = []
+        self.current = local()
+        self.numbers = count()
+
+    def install(self):
+        original_start = BaseProcess.start
+        original_command = spawn.get_command_line
+
+        def start(process):
+            if type(process) is not SpawnProcess or getattr(self.current, "record", None) is not None:
+                untraced_process()
+            record = [None, None]
+            self.expected.append(record)
+            self.current.record = record
+            try:
+                original_start(process)
+                record[1] = process._popen
+            finally:
+                del self.current.record
+
+        def command(**kwargs):
+            record = getattr(self.current, "record", None)
+            argv = original_command(**kwargs)
+            if (record is None or record[0] is not None or
+                    argv[-3] != "-c" or argv[-1] != "--multiprocessing-fork"):
+                untraced_process()
+            path = self.result.with_suffix(f".worker-{next(self.numbers)}.json")
+            record[0] = path
+            argv[-2] = ("from strategies.trace_dialect_entry import trace_worker; "
+                        f"trace_worker({str(self.root)!r}, {str(path)!r}, {kwargs!r})")
+            return argv
+
+        BaseProcess.start = start
+        spawn.get_command_line = command
+
+    def merge_into(self, recorder):
+        for path, process in self.expected:
+            if path is None or process is None or process.poll() != 0:
+                return False
+            try:
+                report = json.loads(path.read_text(encoding="utf-8"))
+                if report["pid"] != process.pid:
+                    return False
+                recorder.merge(report)
+            except (OSError, ValueError, KeyError, TypeError):
+                return False
+        return True
+
+
+def trace_worker(root, result, kwargs):
+    recorder = Recorder(Path(root))
+    recorder.install()
+    BaseProcess.start = untraced_process
+    original_main = spawn._main
+    complete = False
+
+    def main(fd, parent_sentinel):
+        nonlocal complete
+        code = original_main(fd, parent_sentinel)
+        complete = code == 0
+        return code
+
+    @atexit.register
+    def report():
+        if complete and not recorder.unknown:
+            Path(result).write_text(json.dumps({"pid": os.getpid(), **recorder.report()}),
+                                    encoding="utf-8")
+
+    spawn._main = main
+    spawn.spawn_main(**kwargs)
+
+
 def trace(root, node, result):
     os.chdir(root)
-    sys.path.insert(0, str(root))
     recorder = Recorder(root)
-    sys.meta_path.insert(0, recorder)
-    sys.addaudithook(recorder.audit)
-    BaseProcess.start = untraced_process
+    recorder.install()
+    workers = SpawnWorkers(root, result)
+    workers.install()
     import pytest
 
     class Outcome:
@@ -143,12 +244,9 @@ def trace(root, node, result):
 
     outcome = Outcome()
     code = pytest.main([node, "-q", "-p", "no:cacheprovider"], plugins=[outcome])
-    if not code and not recorder.unknown and not outcome.bad and outcome.phases == {"setup", "call", "teardown"}:
-        result.write_text(json.dumps({
-            "tables": [[path, name, whole, sorted(keys)]
-                       for (path, name), (whole, keys) in recorder.tables.items()],
-            "raw_files": sorted(recorder.raw_files),
-        }), encoding="utf-8")
+    if (not code and not recorder.unknown and not outcome.bad and
+            outcome.phases == {"setup", "call", "teardown"} and workers.merge_into(recorder)):
+        result.write_text(json.dumps(recorder.report()), encoding="utf-8")
 
 
 if __name__ == "__main__":
