@@ -1,0 +1,18 @@
+name: Sengi runner trial
+
+on:
+  push:
+    branches: [devin/1795383200-sengi-runner-measurements]
+
+permissions: {}
+
+jobs:
+  smoke:
+    name: Sengi connection smoke test
+    runs-on: sengi-basic-4-ubuntu-2404
+    timeout-minutes: 3
+    steps:
+      - run: |
+          test "$(uname -m)" = x86_64
+          grep -Fx 'VERSION_ID="24.04"' /etc/os-release
+          docker version
