@@ -53,17 +53,38 @@ make e2e-amd64 NO_BUILD=1 IMAGE="$img" EXPERIMENT="$candidate" CPU_DIAGNOSTICS=1
   OUT="$out/shadow"
 python3 tools/operator_outcome_report.py "$out/shadow/e2e.log" 2haz 66ks
 
+# Isolated check rows alone cannot certify a shared-cache verifier batch.
+# Replay its exact order and import probes on the base tree before active use.
+python3 - "$out/shadow/e2e.log" "$out/batches.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+prefix = "RWX_OUTCOMES_V1 "
+rows = (json.loads(line.removeprefix(prefix))
+        for line in Path(sys.argv[1]).read_text().splitlines() if line.startswith(prefix))
+batches = [row["batch"] for row in rows if row["commit"] in ("2haz", "66ks") and row["batch"]]
+assert batches, "no replayable verifier batches"
+Path(sys.argv[2]).write_text(json.dumps(batches))
+PY
+docker_trace --output /out/pilot-verified.json.gz --batch-file /out/batches.json \
+  --site sqlglot/dialects/dialect.py:1280 --site sqlglot/executor/context.py:53 \
+  "${pilot[@]}" | tee "$out/pilot-verified-build.log"
+
 # Separate, bounded full-site trace. Review coverage as well as elapsed time.
-docker_trace --output /out/full.json.gz --all-sites --budget-seconds 540 \
+docker_trace --output /out/full.json.gz --all-sites --batch-file /out/batches.json --budget-seconds 540 \
   | tee "$out/full-build.log"
 ```
 
-After reviewing shadow coverage, choose one map. Active mode only suppresses a
-verification batch if **all its planned checks** agree; it keeps mixed batches
-intact because checks can share state. Pending import probes still run.
+After reviewing shadow coverage and batch completeness, choose one map.
+Active mode needs a complete replay of the exact ordered batch and import
+probes, plus complete isolated traces (with workers) for the batch's checks,
+with agreement at every observed encounter. This includes a comparison
+whose result is cached by one check and reused by another. Mixed, unrecorded,
+and incomplete batches stay intact. Pending import probes still run.
 
 ```bash
-map="$out/pilot.json.gz"  # or "$out/full.json.gz"
+map="$out/pilot-verified.json.gz"  # or "$out/full.json.gz"
 mount="--volume $map:/opt/maps/operator-outcomes.json.gz:ro"
 for i in 1 2 3; do
   make e2e-amd64 NO_BUILD=1 IMAGE="$img" EXPERIMENT="$base" \

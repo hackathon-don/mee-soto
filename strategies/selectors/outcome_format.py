@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 OPS = ("Is", "IsNot", "Eq", "NotEq", "In")
-VERSION = 1
+VERSION = 2
 
 
 def site_id(path, node, index):
@@ -83,6 +83,10 @@ def classify(data, site, old_op, new_op, number, complete, skipped):
     if entry is None or entry[0] != old_op or number not in complete or site in skipped:
         return "unknown"
     pairs = data["rows"].get(site, {}).get(str(number))
+    return classify_pairs(pairs, old_op, new_op)
+
+
+def classify_pairs(pairs, old_op, new_op):
     if not pairs:
         return "unknown"
     old, new = OPS.index(old_op), OPS.index(new_op)

@@ -5,6 +5,7 @@ import atexit
 import enum
 import importlib.abc
 import importlib.machinery
+import inspect
 import json
 import operator
 import os
@@ -44,12 +45,29 @@ def describe(value):
         if cls in (bool, type(None)):
             return [cls.__name__, value]
         return None
-    if type(cls) is enum.EnumType and (cls.__eq__, cls.__ne__) in (
-            (object.__eq__, object.__ne__), (str.__eq__, str.__ne__), (int.__eq__, int.__ne__)):
-        name = object.__getattribute__(value, "_name_")
+    if type(cls) is enum.EnumType:
+        def method(name):
+            for base in cls.__mro__:
+                namespace = vars(base)
+                if name in namespace:
+                    return namespace[name]
+            return None
+
+        eq, ne = method("__eq__"), method("__ne__")
+        if not any(eq is a and ne is b for a, b in (
+                (object.__eq__, object.__ne__), (str.__eq__, str.__ne__), (int.__eq__, int.__ne__))):
+            return None
+        hash_method, length = method("__hash__"), method("__len__")
+        if (not any(hash_method is method for method in
+                    (object.__hash__, enum.Enum.__hash__, str.__hash__, int.__hash__))
+                or method("__getattribute__") is not object.__getattribute__
+                or method("__bool__") is not None
+                or (length is not None and length is not str.__len__)):
+            return None
+        name = inspect.getattr_static(value, "_name_", None)
         if type(name) is str and cls.__members__.get(name) is value:
-            scalar = (str.__str__(value) if cls.__eq__ is str.__eq__ else
-                      int.__int__(value) if cls.__eq__ is int.__eq__ else None)
+            scalar = (str.__str__(value) if eq is str.__eq__ else
+                      int.__int__(value) if eq is int.__eq__ else None)
             return ["enum", cls.__module__, cls.__qualname__, name, describe(scalar)]
     return None
 
@@ -351,5 +369,30 @@ def trace(root, node, result, sites):
         result.write_text(json.dumps(recorder.report()))
 
 
+def trace_batch(root, manifest, result, sites):
+    from .selectors.impact.runner import child_main
+    from .selectors.impact.selector import IMPORT_PROBE_TIMEOUT, preimport
+
+    batch = json.loads(Path(manifest).read_text())
+    recorder = Recorder(root, None if sites is None else set(json.loads(Path(sites).read_text())))
+    preimport()
+    recorder.install()
+    workers = Workers(root, result, sites)
+    events = result.with_suffix(".events")
+    child_main(str(root), batch["tests"], os.open(events, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600),
+               import_checks=batch["imports"], import_timeout=IMPORT_PROBE_TIMEOUT)
+    records = [json.loads(line) for line in events.read_text().splitlines()]
+    checked = [event for event in records if "d" in event]
+    imported = [event for event in records if "i" in event]
+    if (records and "cpu_total" in records[-1]
+            and sorted(event["d"] for event in checked) == sorted(test[0] for test in batch["tests"])
+            and [event["i"] for event in imported] == batch["imports"]
+            and all(event["ok"] for event in checked + imported)
+            and workers.merge(recorder) and not recorder.unknown and sys.getprofile() == recorder.profile):
+        result.write_text(json.dumps(recorder.report()))
+
+
 if __name__ == "__main__":
-    trace(Path(sys.argv[1]), sys.argv[2], Path(sys.argv[3]), sys.argv[4] if len(sys.argv) > 4 else None)
+    mode, root, target, result, *flags = sys.argv[1:]
+    (trace_batch if mode == "batch" else trace)(
+        Path(root), target, Path(result), flags[0] if flags else None)

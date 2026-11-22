@@ -8,7 +8,7 @@ from .impact import selector
 from .impact.diffparse import apply_patch, parse_patch
 from .impact_first_failure_tables import FirstFailureTablesImpact
 from .map_format import catalog_records, catalog_sha256
-from .outcome_format import changed_operator, classify, identity, tree_digest
+from .outcome_format import changed_operator, classify, classify_pairs, identity, tree_digest
 
 
 class FirstFailureTablesOutcomesImpact(FirstFailureTablesImpact):
@@ -25,6 +25,7 @@ class FirstFailureTablesOutcomesImpact(FirstFailureTablesImpact):
                 data = json.load(stream)
             if (data["identity"] == identity() and data["catalog"] == self.catalog
                     and isinstance(data["complete"], list) and isinstance(data["skipped"], list)
+                    and isinstance(data["batches"], list)
                     and data["tree"] == tree_digest(selector.SG)):
                 return data
         except (OSError, EOFError, ValueError, KeyError, TypeError) as error:
@@ -69,28 +70,44 @@ class FirstFailureTablesOutcomesImpact(FirstFailureTablesImpact):
         complete, skipped = set(data["complete"]), set(data["skipped"])
         original = selector.run_all
 
-        def run(plans, *args, **kwargs):
+        def run(plans, ids, limits, deadline):
             for plan in plans:
                 edit = edits.get(plan.cid)
                 if not edit or not plan.run:
                     continue
+                site, old_op, new_op = edit
+                batch = {"tests": [[number, ids[number], limits[number]] for number in plan.run],
+                         "imports": list(plan.pending_imports)}
                 rows = {}
                 for number in plan.run:
                     try:
                         rows[number] = classify(data, *edit, number, complete, skipped)
                     except (IndexError, KeyError, TypeError, ValueError):
                         rows[number] = "unknown"
-                omit = {number for number, state in rows.items() if state == "agree"}
+                eligible = False
+                if not plan.subsets and not plan.fixture_edits and site not in skipped:
+                    try:
+                        observed = data["rows"].get(site, {})
+                        if all(number in complete and
+                               (str(number) not in observed or state == "agree")
+                               for number, state in rows.items()):
+                            eligible = any(
+                                proof["tests"] == batch["tests"] and proof["imports"] == batch["imports"]
+                                and data["sites"][site][0] == old_op
+                                and classify_pairs(proof["rows"].get(site), old_op, new_op) == "agree"
+                                for proof in data["batches"]
+                            )
+                    except (IndexError, KeyError, TypeError, ValueError):
+                        pass
                 if shadow:
                     selector.log("RWX_OUTCOMES_V1 " + json.dumps(
-                        {"commit": plan.cid, "site": edit[0], "checks": rows},
+                        {"commit": plan.cid, "site": site, "checks": rows,
+                         "batch": batch if not plan.subsets and not plan.fixture_edits else None,
+                         "eligible": eligible},
                         separators=(",", ":")))
-                elif len(omit) == len(plan.run):
-                    # Never remove a check that may set up shared state for a retained check.
+                elif eligible:
                     plan.run = []
-                    for number in omit:
-                        plan.subsets.pop(number, None)
-            return original(plans, *args, **kwargs)
+            return original(plans, ids, limits, deadline)
 
         selector.run_all = run
         try:
