@@ -13,6 +13,7 @@ from strategies.selectors.impact import ImpactSelector
 from strategies.selectors.impact_first_failure import FirstFailureImpact
 from strategies.selectors.impact_first_failure_tables import FirstFailureTablesImpact
 from strategies.selectors.impact_first_failure_tables_free_cpu import FirstFailureTablesFreeCpuImpact
+from strategies.selectors.impact_first_failure_tables_free_cpu_conditions import FirstFailureTablesFreeCpuConditionsImpact
 from strategies.selectors.impact_first_failure_tables_free_cpu_outcomes import FirstFailureTablesFreeCpuOutcomesImpact
 from strategies.selectors.impact_first_failure_tables_outcomes import FirstFailureTablesOutcomesImpact
 from strategies.selectors.impact_fresh_copy import FreshTableCopyImpact
@@ -70,6 +71,9 @@ EXPERIMENTS: dict[str, Config] = {
 
 EXPERIMENTS["impact-first-failure-tables-free-cpu-outcomes"] = replace(
     EXPERIMENTS["impact-first-failure-tables-free-cpu"], selector_cls=FirstFailureTablesFreeCpuOutcomesImpact,
+)
+EXPERIMENTS["impact-first-failure-tables-free-cpu-conditions"] = replace(
+    EXPERIMENTS["impact-first-failure-tables-free-cpu"], selector_cls=FirstFailureTablesFreeCpuConditionsImpact,
 )
 
 DEFAULT_CONFIG = EXPERIMENTS["baseline"]
