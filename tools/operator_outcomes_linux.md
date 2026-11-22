@@ -1,0 +1,107 @@
+# Operator-outcome pilot (native Linux/amd64)
+
+Run from this scratch branch, on the same pinned image for tracing and scoring.
+Only patches and the catalog reach the selector; labels stay with the scorer.
+The submitted image command is unchanged.
+
+```bash
+set -euo pipefail
+test "$(uname -s)/$(uname -m)" = Linux/x86_64
+img=blast-radius-outcomes
+base=impact-first-failure-tables
+candidate=impact-first-failure-tables-outcomes
+out="$PWD/out/operator-outcomes"
+mkdir -p "$out"
+docker build --platform linux/amd64 -t "$img" .
+
+docker_trace() {
+  docker run --rm --network none --cpus 4 --memory 8g --memory-swap 8g \
+    --read-only --tmpfs /tmp:rw,exec,size=1g,mode=1777 --env HOME=/tmp \
+    --user "$(id -u):$(id -g)" \
+    -v "$PWD/sample/tests.json:/data/tests.json:ro" -v "$out:/out" \
+    "$img" python -m strategies.build_operator_outcomes \
+    --catalog /data/tests.json --jobs 4 "$@"
+}
+seed='--env PYTHONHASHSEED=0'
+make e2e-amd64 NO_BUILD=1 IMAGE="$img" EXPERIMENT="$base" CPU_DIAGNOSTICS=1 \
+  DIAGNOSTIC_FLAGS="$seed --env BR_CPU_DIAGNOSTICS=1" OUT="$out/baseline-ledger"
+mapfile -t numbers < <(python3 - "$out/baseline-ledger/e2e.log" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+ids = set()
+for line in Path(sys.argv[1]).read_text().splitlines():
+    if line.startswith("RWX_CPU_V1 "):
+        row = json.loads(line.removeprefix("RWX_CPU_V1 "))
+        if row["commit"] in ("2haz", "66ks"):
+            ids.update(row["checked"])
+for number in sorted(ids):
+    print(number)
+PY
+)
+test "${#numbers[@]}" -gt 0
+pilot=()
+for number in "${numbers[@]}"; do pilot+=(--test-number "$number"); done
+docker_trace --output /out/pilot.json.gz \
+  --site sqlglot/dialects/dialect.py:1280 --site sqlglot/executor/context.py:53 \
+  "${pilot[@]}" | tee "$out/pilot-build.log"
+
+mount="--volume $out/pilot.json.gz:/opt/maps/operator-outcomes.json.gz:ro"
+make e2e-amd64 NO_BUILD=1 IMAGE="$img" EXPERIMENT="$candidate" CPU_DIAGNOSTICS=1 \
+  DIAGNOSTIC_FLAGS="$seed $mount --env BR_OUTCOME_SHADOW=1 --env BR_CPU_DIAGNOSTICS=1" \
+  OUT="$out/shadow"
+python3 tools/operator_outcome_report.py "$out/shadow/e2e.log" 2haz 66ks
+
+# Separate, bounded full-site trace. Review coverage as well as elapsed time.
+docker_trace --output /out/full.json.gz --all-sites --budget-seconds 540 \
+  | tee "$out/full-build.log"
+```
+
+After reviewing shadow coverage, choose one map. Active mode only suppresses a
+verification batch if **all its planned checks** agree; it keeps mixed batches
+intact because checks can share state. Pending import probes still run.
+
+```bash
+map="$out/pilot.json.gz"  # or "$out/full.json.gz"
+mount="--volume $map:/opt/maps/operator-outcomes.json.gz:ro"
+for i in 1 2 3; do
+  make e2e-amd64 NO_BUILD=1 IMAGE="$img" EXPERIMENT="$base" \
+    DIAGNOSTIC_FLAGS="$seed" OUT="$out/base-$i"
+  make e2e-amd64 NO_BUILD=1 IMAGE="$img" EXPERIMENT="$candidate" \
+    DIAGNOSTIC_FLAGS="$seed $mount --env BR_OUTCOME_SHADOW=0" OUT="$out/candidate-$i"
+done
+```
+
+Use a fresh labeled holdout directory (not one with cached evaluator outputs).
+The following runs the main-branch evaluator against both experiments with the
+same sandbox and input mounts; its labels stay on the host. If the target is
+unlabeled, generate and label it first using main's `make holdout` workflow.
+
+```bash
+export DEV_IMAGE="$img"
+export OUTCOME_MAP="$map"
+holdout=/absolute/path/to/fresh-labeled-holdout
+tool=/absolute/path/to/main/tools/holdout_eval.py
+python3 - "$tool" "$holdout" "$base" "$candidate" <<'PY'
+import os
+import runpy
+import sys
+
+path, holdout, base, candidate = sys.argv[1:]
+module = runpy.run_path(path)
+main = module["main"]
+main.__globals__["RUN_FLAGS"].extend([
+    "--env", "PYTHONHASHSEED=0", "--env", "BR_OUTCOME_SHADOW=0",
+    "--volume", f'{os.environ["OUTCOME_MAP"]}:/opt/maps/operator-outcomes.json.gz:ro',
+])
+sys.argv = [path, holdout, "30", base, candidate]
+raise SystemExit(main())
+PY
+```
+
+Do not treat an agreeing shadow row as held-out or active-mode evidence.
+The recorder rejects incomplete tests and workers, unsupported operands,
+application clock/thread observations, and unsupported comprehension-chain
+rewrites. It does not prove that native extensions cannot introduce
+nondeterminism. A timed-out trace emits a partial map, never an all-test claim.
