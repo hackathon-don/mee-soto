@@ -10,10 +10,8 @@ import subprocess
 import sys
 
 if __package__:
-    from .ci_cpu_report import render_cpu
     from .ci_score import experiment_names, median_run, print_experiment, print_selection_errors, score_with_schedule
 else:
-    from ci_cpu_report import render_cpu
     from ci_score import experiment_names, median_run, print_experiment, print_selection_errors, score_with_schedule
 
 
@@ -36,7 +34,7 @@ def collect(names, run_score=score_with_schedule):
         for i in range(REPEATS):
             print(f"Benchmarking {name}: {i + 1}/{REPEATS}", file=sys.stderr)
             try:
-                rows.append(run_score(name, cpu_diagnostics=True))
+                rows.append(run_score(name))
             except (OSError, ValueError, subprocess.CalledProcessError):
                 # Logs show the underlying problem, not untrusted/raw inputs in the artifact.
                 print(f"Run failed for {name}: {i + 1}/{REPEATS}", file=sys.stderr)
@@ -155,10 +153,8 @@ def render_markdown(record, results):
             if completed(rows):
                 run = median_run(rows)
                 print_selection_errors(run)
-                print()
-                print(render_cpu(name, run.score.cpu, run.cpu, run.schedule))
             else:
-                print("Median-run selection and CPU diagnostics unavailable.")
+                print("Median-run selection diagnostics unavailable.")
             print()
     return output.getvalue()
 

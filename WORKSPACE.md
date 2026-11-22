@@ -144,16 +144,19 @@ entrypoints do not enable this instrumentation.
 ## Benchmark release
 
 **Benchmark release** runs on every push to main and benchmarks every
-registered experiment three times at the pushed commit. Runs are queued one at a
-time. The workflow saves the human report and structured results as artifacts,
-even when nothing is released. The
+registered experiment three times at the pushed commit, without CPU
+diagnostics so logging overhead stays out of the ranked totals. The workflow
+saves the human report and structured results as artifacts, even when nothing
+is released. The
 baseline is a reference; eligible candidates finish all three runs without a
 miss and are ranked by exact median simulated-plus-CPU time. An incomplete batch
 or no eligible candidate cannot release.
 
 When the batch has an eligible winner, a separate job validates the saved
 result and attaches both reports to a release tagged at the measured commit.
-It does not change the default experiment or submit anything to the
+The release notes are the full report. A pull request that changes the workflow
+or its report tools runs the same benchmark and release validation as a dry run
+that stops before creating a tag or release. It does not change the default experiment or submit anything to the
 leaderboard.
 
 ## Impact selector
