@@ -10,6 +10,7 @@ from strategies.selectors import Selector
 from strategies.selectors.all_tests import AllTestsSelector
 from strategies.selectors.impact import ImpactSelector
 from strategies.selectors.impact_fresh_copy import FreshTableCopyImpact
+from strategies.selectors.impact_general_probe import GeneralProbeImpact
 from strategies.selectors.impact_individual_proof import IndividualProofImpact
 from strategies.selectors.impact_optimizer_transcript import OptimizerTranscriptImpact
 from strategies.selectors.map_narrow import NarrowMapSelector
@@ -40,6 +41,9 @@ EXPERIMENTS: dict[str, Config] = {
     "impact-full-optimizer-proof": Config(selector_cls=OptimizerTranscriptImpact),
     "impact-variable-workers-matched": Config(
         selector_cls=OptimizerTranscriptImpact, scheduler_cls=VariableWorkerScheduler
+    ),
+    "impact-general-probe": Config(
+        selector_cls=GeneralProbeImpact, scheduler_cls=VariableWorkerScheduler
     ),
 }
 
