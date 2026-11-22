@@ -78,11 +78,11 @@ def score_record(run):
     }
 
 
-def make_record(commit, results, *, jobs_succeeded=True, map_digests=None):
-    """A batch is complete only if every job succeeded and all experiments used one file map."""
-    digests = set((map_digests or {}).values())
-    same_map = map_digests is None or (len(digests) == 1 and map_digests.keys() == results.keys())
-    all_complete = (jobs_succeeded and same_map and BASELINE in results
+def make_record(commit, results, *, image_ids, jobs_succeeded=True):
+    """A batch is complete only if every job succeeded and all experiments used one image."""
+    distinct_ids = set(image_ids.values())
+    same_image = len(distinct_ids) == 1 and image_ids.keys() == results.keys()
+    all_complete = (jobs_succeeded and same_image and BASELINE in results
                     and all(completed(rows) for rows in results.values()))
     ranking = rank(results)
     experiments = {}
@@ -94,15 +94,15 @@ def make_record(commit, results, *, jobs_succeeded=True, map_digests=None):
             "eligible": name in ranking,
         }
     return {
-        "schema": 1,
+        "schema": 2,
         "commit": commit,
         "machine": "linux/amd64",
         "sample": "public",
         "repeats": REPEATS,
         "complete": all_complete,
         "jobs_succeeded": jobs_succeeded,
-        "same_map": same_map,
-        "map_digest": next(iter(digests)) if same_map and digests else None,
+        "same_image": same_image,
+        "image_id": next(iter(distinct_ids)) if same_image else None,
         "baseline": BASELINE,
         "ranking": ranking,
         "winner": ranking[0] if all_complete and ranking else None,
@@ -144,8 +144,8 @@ def render_markdown(record, results):
             print(f"Winner: `{winner}` with an unrounded median total of {median} s.")
         elif not record["jobs_succeeded"]:
             print("No release: an experiment job failed in the latest attempt.")
-        elif not record["same_map"]:
-            print("No release: experiments were measured with different file maps.")
+        elif not record["same_image"]:
+            print("No release: experiments did not all report the same image ID.")
         elif not record["complete"]:
             print("No release: the benchmark batch is incomplete.")
         else:
@@ -242,6 +242,10 @@ def load_trial(row):
                          scheduling=load_scheduling(row.get("scheduling")))
 
 
+def valid_image_id(value):
+    return isinstance(value, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", value) is not None
+
+
 def load_trials(directory, names):
     """Keep each experiment's latest attempt; a missing or invalid file counts as failed runs."""
     latest = {}
@@ -254,13 +258,13 @@ def load_trials(directory, names):
             checks = load_checks(obj.get("false_checks"))
             rows = [None if row is None else replace(row, checks=checks)
                     for row in map(load_trial, obj["runs"])]
-            digest = obj.get("map_digest")
-            if len(rows) != REPEATS or not (isinstance(digest, str) and re.fullmatch(r"[0-9a-f]{64}", digest)):
+            image_id = obj.get("image_id")
+            if len(rows) != REPEATS or not valid_image_id(image_id):
                 continue
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             continue
         if name not in latest or attempt > latest[name][0]:
-            latest[name] = (attempt, rows, digest)
+            latest[name] = (attempt, rows, image_id)
     results = {name: latest[name][1] if name in latest else [None] * REPEATS for name in names}
     return results, {name: latest[name][2] for name in names if name in latest}
 
@@ -280,6 +284,7 @@ def main():
     measure = commands.add_parser("measure", help="run one experiment's trials")
     measure.add_argument("--experiment", required=True)
     measure.add_argument("--attempt", type=int, required=True)
+    measure.add_argument("--image-id", required=True)
     measure.add_argument("--output", type=Path, required=True)
     report = commands.add_parser("report", help="combine trial files into the reports")
     report.add_argument("--trials-dir", type=Path, required=True)
@@ -294,17 +299,20 @@ def main():
     elif args.command == "measure":
         if args.experiment not in names:
             parser.error("experiment is not registered at the measured commit")
+        if not valid_image_id(args.image_id):
+            parser.error("expected a sha256 Docker image ID")
         rows = collect([args.experiment])[args.experiment]
         checks = diagnostic_checks(args.experiment)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps({
             "experiment": args.experiment, "attempt": args.attempt,
+            "image_id": args.image_id,
             "runs": [trial_record(run) for run in rows],
             "false_checks": checks_record(checks),
         }) + "\n", encoding="utf-8")
     else:
-        results, digests = load_trials(args.trials_dir, names)
-        record = make_record(commit, results, jobs_succeeded=not args.jobs_failed, map_digests=digests)
+        results, image_ids = load_trials(args.trials_dir, names)
+        record = make_record(commit, results, jobs_succeeded=not args.jobs_failed, image_ids=image_ids)
         args.output_dir.mkdir(parents=True, exist_ok=True)
         (args.output_dir / "results.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
         (args.output_dir / "report.md").write_text(render_markdown(record, results), encoding="utf-8")

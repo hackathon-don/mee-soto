@@ -2,9 +2,7 @@
 .venv/
 **/__pycache__/
 .pytest_cache/
-sample/*
-!sample/tests.json
-tools/*
-!tools/build_file_map.py
+sample/
+tools/
 tests/
 out/

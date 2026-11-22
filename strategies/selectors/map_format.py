@@ -1,4 +1,4 @@
-"""Shared schema helpers for build-generated file maps."""
+"""Catalog identity helpers for the table-read index."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-SCHEMA_VERSION = 2
 SOURCE = {
     "repository": "tobymao/sqlglot",
     "commit": "eb11aec4be8cb2122afe713a4816662c3f0fb2fa",
@@ -15,9 +14,7 @@ SOURCE = {
 }
 
 
-def valid_relative_path(path: str, *, allow_root: bool = False) -> bool:
-    if allow_root and path == ".":
-        return True
+def valid_relative_path(path: str) -> bool:
     return bool(path) and not path.startswith("/") and "\\" not in path and "\x00" not in path and all(
         part not in ("", ".", "..") for part in path.split("/")
     )
