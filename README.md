@@ -7,7 +7,7 @@ file map only, does not execute tests at runtime, and falls back to all tests
 for unknown changes. `ImpactSelector` narrows candidates with committed
 line-coverage maps and an AST diff, then runs the cheap ones against the
 patched tree inside the container and keeps the ones that fail. See
-[WORKSPACE.md](WORKSPACE.md) for how to choose one.
+[WORKSPACE.md](WORKSPACE.md) for how to choose one with `EXPERIMENT`.
 
 ## The problem
 

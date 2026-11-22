@@ -10,6 +10,7 @@ from strategies.selectors import Selector
 from strategies.selectors.all_tests import AllTestsSelector
 from strategies.selectors.impact import ImpactSelector
 from strategies.selectors.impact_optimizer_transcript import OptimizerTranscriptImpact
+from strategies.selectors.impact_tables import TableKeySelector
 from strategies.selectors.map_narrow import NarrowMapSelector
 from strategies.selectors.map_only import MapSelector
 
@@ -36,6 +37,10 @@ EXPERIMENTS: dict[str, Config] = {
     "impact-full-optimizer-proof": Config(selector_cls=OptimizerTranscriptImpact),
     "impact-variable-workers-matched": Config(
         selector_cls=OptimizerTranscriptImpact, scheduler_cls=VariableWorkerScheduler
+    ),
+    "impact-tables": Config(selector_cls=TableKeySelector),
+    "impact-tables-variable-workers": Config(
+        selector_cls=TableKeySelector, scheduler_cls=VariableWorkerScheduler
     ),
 }
 
