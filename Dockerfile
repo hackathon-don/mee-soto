@@ -39,4 +39,4 @@ RUN if [ "${FREE_CPU_MAPS}" = "1" ]; then \
     fi
 # The judge runs the image without flags, so the submitted experiment is set
 # here. Local runs without --experiment still use DEFAULT_CONFIG (baseline).
-CMD ["python", "/app/main.py", "--experiment", "impact-first-failure-tables-free-cpu-stacked-maps"]
+CMD ["python", "/app/main.py", "--experiment", "impact-stacked-maps-heavy-drop"]

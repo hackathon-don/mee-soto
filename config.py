@@ -16,6 +16,7 @@ from strategies.selectors.impact_first_failure_tables_free_cpu import FirstFailu
 from strategies.selectors.impact_first_failure_tables_free_cpu_outcomes import FirstFailureTablesFreeCpuOutcomesImpact
 from strategies.selectors.impact_keys import KeyReadImpact
 from strategies.selectors.impact_fixture_entries import FixtureEntryImpact
+from strategies.selectors.impact_heavy_drop import HeavyDropImpact
 from strategies.selectors.impact_optimizer_transcript import OptimizerTranscriptImpact
 from strategies.selectors.impact_stacked_maps import StackedMapsImpact
 from strategies.selectors.impact_tables import TableKeySelector
@@ -79,6 +80,10 @@ EXPERIMENTS["impact-first-failure-tables-free-cpu-outcomes"] = replace(
 
 EXPERIMENTS["impact-first-failure-tables-free-cpu-stacked-maps"] = replace(
     EXPERIMENTS["impact-first-failure-tables-free-cpu"], selector_cls=StackedMapsImpact,
+)
+
+EXPERIMENTS["impact-stacked-maps-heavy-drop"] = replace(
+    EXPERIMENTS["impact-first-failure-tables-free-cpu-stacked-maps"], selector_cls=HeavyDropImpact,
 )
 
 DEFAULT_CONFIG = EXPERIMENTS["baseline"]
