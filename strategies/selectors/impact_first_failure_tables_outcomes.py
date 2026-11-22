@@ -7,28 +7,30 @@ import sys
 from .impact import selector
 from .impact.diffparse import apply_patch, parse_patch
 from .impact_first_failure_tables import FirstFailureTablesImpact
-from .map_format import catalog_records, catalog_sha256
 from .outcome_format import (
-    EXECUTOR_CLOCK_PATH, changed_operator, classify, classify_pairs, executor_clock_lines, identity, tree_digest,
+    COMMITTED_MAP, EXECUTOR_CLOCK_PATH, changed_operator, classify, classify_pairs, executor_clock_lines, trace_header,
 )
 
 
 class FirstFailureTablesOutcomesImpact(FirstFailureTablesImpact):
     def __init__(self, catalog, config):
         super().__init__(catalog, config)
-        self.catalog = catalog_sha256(catalog_records(catalog))
+        self.catalog = catalog
 
     def _map(self):
-        path = os.environ.get("BR_OUTCOME_MAP", "/opt/maps/operator-outcomes.json.gz")
         if os.environ.get("PYTHONHASHSEED") != "0" or sys.flags.hash_randomization:
             return None
         try:
+            path = os.environ.get("BR_OUTCOME_MAP")
+            if path is None:
+                path = COMMITTED_MAP if COMMITTED_MAP.is_file() else "/opt/maps/operator-outcomes.json.gz"
             with gzip.open(path, "rt", encoding="utf-8") as stream:
                 data = json.load(stream)
-            if (data["identity"] == identity() and data["catalog"] == self.catalog
+            if (data["header"] == trace_header(selector.SG, self.catalog)
+                    and (not data.get("committed") or
+                         data["header"]["sqlglot_revision"] and data.get("workers_mode") == "persistent")
                     and isinstance(data["complete"], list) and isinstance(data["skipped"], list)
-                    and isinstance(data["batches"], list)
-                    and data["tree"] == tree_digest(selector.SG)):
+                    and isinstance(data["batches"], list)):
                 return data
         except (OSError, EOFError, ValueError, KeyError, TypeError) as error:
             selector.log("outcome map unavailable:", repr(error))

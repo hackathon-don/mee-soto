@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 import time
 
-from .trace_operator_outcomes import Recorder, Workers
+from .trace_operator_outcomes import OPERATORS, Recorder, Workers
 
 
 def trace_shard(root, manifest, result, sites):
@@ -16,8 +16,27 @@ def trace_shard(root, manifest, result, sites):
     order = {node: index for index, (_, node) in enumerate(cases)}
     plain = os.environ.get("BR_OUTCOME_PROFILE") == "plain"
     metrics = os.environ.get("BR_OUTCOME_METRICS")
+    budget = int(os.environ.get("BR_OUTCOME_ENCOUNTER_BUDGET", "0"))
+    remaining = None
     recorder = None if plain else Recorder(root, None if sites is None else set(json.loads(Path(sites).read_text())))
     if recorder is not None:
+        if budget:
+            observe = recorder.observe
+
+            def observe_limited(key, op, left, right, chain):
+                nonlocal remaining
+                if remaining is not None and key is not None:
+                    if remaining <= 0:
+                        if remaining == 0:
+                            recorder.reject("parent comparison encounter budget exceeded")
+                            remaining = -1
+                        if recorder.encounters is not None:
+                            recorder.encounters[key] = recorder.encounters.get(key, 0) + 1
+                        return OPERATORS[op](left, right)
+                    remaining -= 1
+                return observe(key, op, left, right, chain)
+
+            recorder.observe = observe_limited
         recorder.install()
         workers = Workers(root, result, sites)
     import pytest
@@ -33,6 +52,7 @@ def trace_shard(root, manifest, result, sites):
 
             @pytest.hookimpl(hookwrapper=True, tryfirst=True)
             def pytest_runtest_protocol(self, item):
+                nonlocal remaining
                 number = numbers[item.nodeid]
                 progress.write(f"{number}\n")
                 if metrics:
@@ -46,6 +66,8 @@ def trace_shard(root, manifest, result, sites):
                 else:
                     global_rows, global_unknown = recorder.rows, recorder.unknown
                     recorder.rows, recorder.unknown = {}, False
+                    if budget:
+                        remaining = budget
                     try:
                         yield
                         if (recorder.unknown and not recorder.rewrite_only) or sys.getprofile() != recorder.profile:
@@ -53,6 +75,9 @@ def trace_shard(root, manifest, result, sites):
                         else:
                             rows[number] = recorder.report()["sites"]
                     finally:
+                        if remaining == -1:
+                            print(f"RWX_OUTCOME_BUDGET {number} {budget}", file=sys.stderr, flush=True)
+                        remaining = None
                         recorder.rows, recorder.unknown = global_rows, global_unknown
                         recorder.encounters = None
                 if metrics:

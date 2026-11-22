@@ -36,6 +36,8 @@ TIMEZONE_TYPE = datetime.timezone
 SIMPLE = (type(None), bool, int, float, str, bytes)
 SIMPLE_TAGS = {id(cls): cls.__name__ for cls in SIMPLE}
 FAST_SCALARS = (type(None), bool, int, float, str)
+PROFILE_SAFE_CALLS = (getattr, hasattr, isinstance, issubclass, len, next, ord, setattr)
+PROFILE_SAFE_IDS = frozenset(map(id, PROFILE_SAFE_CALLS))
 OPERATORS = {
     "Is": operator.is_, "IsNot": operator.is_not, "Eq": operator.eq, "NotEq": operator.ne,
     "In": lambda a, b: operator.contains(b, a),
@@ -195,6 +197,7 @@ class Recorder(importlib.abc.MetaPathFinder):
         cache = os.environ.get("BR_OUTCOME_CODE_CACHE")
         self.cache = Path(cache) if cache else None
         self.rewrite_only = os.environ.get("BR_OUTCOME_PROFILE") == "rewrite"
+        self.fast_profile = os.environ.get("BR_OUTCOME_FAST_PROFILE") == "1"
         self.encounters = None
         if self.compact and os.environ.get("BR_OUTCOME_FAST_BUILTINS") == "1":
             self.builtins = builtin_rows()
@@ -229,7 +232,9 @@ class Recorder(importlib.abc.MetaPathFinder):
         sys.setprofile(self.profile)
 
     def profile(self, frame, event, arg):
-        if event == "c_call" and relevant(frame):
+        if event == "c_call":
+            if (self.fast_profile and id(arg) in PROFILE_SAFE_IDS) or not relevant(frame):
+                return
             module = getattr(arg, "__module__", None)
             owner = getattr(arg, "__self__", None)
             name = getattr(arg, "__name__", "")

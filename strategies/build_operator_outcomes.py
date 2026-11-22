@@ -16,8 +16,7 @@ import sys
 import tempfile
 import time
 
-from .selectors.map_format import catalog_records, catalog_sha256
-from .selectors.outcome_format import OPS, identity, site_id, tree_digest
+from .selectors.outcome_format import OPS, site_id, trace_header
 from .trace_operator_outcomes import BATCH_REJECTION, CAP, rewrite_code
 
 
@@ -71,14 +70,16 @@ def cgroup_cpu_seconds():
 
 
 def collect(root, tests, requested, indexed, jobs, budget, timeout, batches, compact, cache_code, profile,
-            persistent, fast_builtins):
+            persistent, fast_builtins, encounter_budget, fast_profile):
     deadline = time.monotonic() + budget
     env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1]),
                PYTHONDONTWRITEBYTECODE="1", SKIP_INTEGRATION="0", PYTHONHASHSEED="0",
                OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1",
                MKL_NUM_THREADS="1", PYTEST_DISABLE_PLUGIN_AUTOLOAD="1")
     env.update(BR_OUTCOME_COMPACT="1" if compact else "0", BR_OUTCOME_PROFILE=profile or "",
-               BR_OUTCOME_CODE_CACHE="", BR_OUTCOME_FAST_BUILTINS="1" if fast_builtins else "0")
+               BR_OUTCOME_CODE_CACHE="", BR_OUTCOME_FAST_BUILTINS="1" if fast_builtins else "0",
+               BR_OUTCOME_ENCOUNTER_BUDGET=str(encounter_budget),
+               BR_OUTCOME_FAST_PROFILE="1" if fast_profile else "0")
     with tempfile.TemporaryDirectory() as temp:
         directory = Path(temp)
         targets = None if requested is None else set(indexed)
@@ -264,6 +265,8 @@ def main():
     parser.add_argument("--source-root", type=Path, default=Path("/opt/sg"))
     parser.add_argument("--catalog", type=Path, required=True)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--committed-map", action="store_true",
+                        help="require an all-site, full-catalog, patch-independent persistent map")
     scope = parser.add_mutually_exclusive_group(required=True)
     scope.add_argument("--site", action="append", help="path:line, or exact path:line:column:link")
     scope.add_argument("--all-sites", action="store_true")
@@ -272,6 +275,10 @@ def main():
     parser.add_argument("--compact-records", action="store_true", help="dedupe type, identity and outcome vectors")
     parser.add_argument("--fast-builtins", action="store_true",
                         help="use prebuilt compact rows after evaluating exact builtin operands")
+    parser.add_argument("--fast-profile", action="store_true",
+                        help="prefilter known harmless builtin calls in the safety profiler")
+    parser.add_argument("--encounter-budget", type=int, default=0,
+                        help="mark a persistent test unknown above this many parent-process comparisons (0: unlimited)")
     parser.add_argument("--cache-rewrites", action="store_true", help="compile each rewritten module once per build")
     parser.add_argument("--profile-mode", choices=("plain", "rewrite"),
                         help="time plain tests or rewritten tests without recording; never write a map")
@@ -284,15 +291,24 @@ def main():
         parser.error("--jobs must be positive")
     if args.fast_builtins and not args.compact_records:
         parser.error("--fast-builtins requires --compact-records")
+    if args.encounter_budget < 0 or (args.encounter_budget and
+                                    (args.workers_mode != "persistent" or args.profile_mode)):
+        parser.error("--encounter-budget must be nonnegative and requires persistent recording")
     if args.profile_mode:
         if args.output or args.batch_file or args.compact_records or (args.profile_mode == "plain" and args.cache_rewrites):
             parser.error("profile modes do not accept map output, batches or records; only rewrite mode can cache")
     elif args.output is None:
         parser.error("--output is required to build a map")
+    if args.committed_map and (not args.all_sites or args.test_number or args.batch_file or args.profile_mode
+                               or args.workers_mode != "persistent"):
+        parser.error("--committed-map requires all sites and tests, persistent recording, and no patch batches")
     start = time.monotonic()
     cpu_start = cgroup_cpu_seconds()
     root = args.source_root.resolve()
     catalog = json.loads(args.catalog.read_text())["tests"]
+    header = None if args.profile_mode else trace_header(root, catalog)
+    if args.committed_map and not header["sqlglot_revision"]:
+        parser.error("--committed-map requires a source revision marker from the pinned Docker image")
     tests = [test for test in catalog if not args.test_number or test["number"] in args.test_number]
     tests.sort(key=lambda test: (-test["seconds"], test["number"]))
     if not tests:
@@ -310,7 +326,8 @@ def main():
     persistent = args.workers_mode == "persistent"
     completed, skipped, rows, verified, attempted, child_seconds, global_rows = collect(
         root, tests, args.site, indexed, args.jobs, args.budget_seconds, args.timeout_seconds,
-        batches, args.compact_records, args.cache_rewrites, args.profile_mode, persistent, args.fast_builtins)
+        batches, args.compact_records, args.cache_rewrites, args.profile_mode, persistent, args.fast_builtins,
+        args.encounter_budget, args.fast_profile)
     elapsed = time.monotonic() - start
     cpu_end = cgroup_cpu_seconds()
     cpu = cpu_end - cpu_start if cpu_start is not None and cpu_end is not None else None
@@ -320,10 +337,15 @@ def main():
           f"{elapsed:.2f}s elapsed with {args.jobs} jobs{utilization}")
     if args.profile_mode:
         return
-    payload = {"identity": identity(), "tree": tree_digest(root),
-               "catalog": catalog_sha256(catalog_records(catalog)), "complete": completed,
+    if args.committed_map and (attempted != len(tests) or elapsed >= args.budget_seconds):
+        parser.error("committed map recording did not run the full catalog within the deadline")
+    if args.committed_map and header != trace_header(root, json.loads(args.catalog.read_text())["tests"]):
+        parser.error("committed map source or catalog changed during recording")
+    payload = {"header": header, "complete": completed,
                "skipped": skipped, "sites": indexed, "rows": rows, "batches": [] if persistent else verified,
                "compact": args.compact_records, "selected": sorted(test["number"] for test in tests)}
+    if args.committed_map:
+        payload["committed"] = True
     if persistent:
         payload.update(workers_mode="persistent", global_rows=global_rows, shadow_batches=verified)
     args.output.parent.mkdir(parents=True, exist_ok=True)

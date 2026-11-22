@@ -6,8 +6,10 @@ ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 COPY requirements.lock /tmp/requirements.lock
 RUN python -m pip install -r /tmp/requirements.lock
 RUN python -m compileall -q -j 0 /usr/local/lib/python3.13 >/dev/null || true
-ADD https://github.com/tobymao/sqlglot/archive/eb11aec4be8cb2122afe713a4816662c3f0fb2fa.tar.gz /tmp/sqlglot.tar.gz
+ARG SQLGLOT_REV=eb11aec4be8cb2122afe713a4816662c3f0fb2fa
+ADD https://github.com/tobymao/sqlglot/archive/${SQLGLOT_REV}.tar.gz /tmp/sqlglot.tar.gz
 RUN mkdir -p /opt/sg && tar xzf /tmp/sqlglot.tar.gz -C /opt/sg --strip-components=1 && rm /tmp/sqlglot.tar.gz \
+    && printf '%s\n' "$SQLGLOT_REV" > /opt/sg/.blast-radius-sqlglot-rev \
     && python -m compileall -q -j 0 /opt/sg \
     && chmod -R a+rX /opt/sg
 

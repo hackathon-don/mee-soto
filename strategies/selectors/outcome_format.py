@@ -1,6 +1,7 @@
 import ast
 import hashlib
 import io
+import json
 import platform
 import sys
 import tokenize
@@ -8,7 +9,10 @@ from pathlib import Path
 
 
 OPS = ("Is", "IsNot", "Eq", "NotEq", "In")
-VERSION = 2
+VERSION = 3
+TRACER_VERSION = 1
+COMMITTED_MAP = Path(__file__).parent / "impact/maps/operator-outcomes.json.gz"
+SOURCE_REVISION_FILE = ".blast-radius-sqlglot-rev"
 EXECUTOR_CLOCK_PATH = "sqlglot/executor/__init__.py"
 EXECUTOR_CLOCK_HASH = "a2149f32cf1912b05017ecbf033a0e2834f1da32eaa5a7c2e69572fc7d8fa94f"
 
@@ -32,6 +36,24 @@ def site_id(path, node, index):
 def identity():
     return [VERSION, sys.implementation.name, list(sys.version_info[:3]),
             sys.platform, platform.machine(), "0"]
+
+
+def source_revision(root):
+    try:
+        revision = (Path(root) / SOURCE_REVISION_FILE).read_text(encoding="ascii").strip()
+    except FileNotFoundError:
+        return None
+    if len(revision) != 40 or any(char not in "0123456789abcdef" for char in revision):
+        raise ValueError("invalid SQLGlot revision marker")
+    return revision
+
+
+def trace_header(root, catalog):
+    records = sorted(catalog, key=lambda test: test["number"])
+    encoded = json.dumps(records, sort_keys=True, separators=(",", ":")).encode()
+    return {"identity": identity(), "tracer_version": TRACER_VERSION,
+            "sqlglot_revision": source_revision(root), "catalog": hashlib.sha256(encoded).hexdigest(),
+            "tree": tree_digest(root)}
 
 
 def tree_digest(root):

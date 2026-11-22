@@ -33,7 +33,8 @@ def main():
                             for path in (args.isolated, args.persistent))
     if (isolated.get("workers_mode", "isolated") != "isolated"
             or persistent.get("workers_mode") != "persistent"
-            or any(isolated[key] != persistent[key] for key in ("identity", "tree", "catalog", "selected", "sites"))):
+            or "header" not in isolated or "header" not in persistent
+            or any(isolated[key] != persistent[key] for key in ("header", "selected", "sites"))):
         parser.error("expected isolated and persistent maps of the same build inputs, tests and sites")
     mismatches = list(findings(isolated, persistent))
     print("test,site,old,new,isolated")

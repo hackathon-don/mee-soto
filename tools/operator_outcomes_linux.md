@@ -1,5 +1,40 @@
 # Operator-outcome pilot (native Linux/amd64)
 
+### Regenerate the patch-independent committed map
+
+Run from the repository root on native Linux/amd64. This one-off record
+uses the pinned image, catalog and four cores. No patch, label, or ordered
+patch-batch input is mounted. Check the reported completion and file size
+against the track's repository cap before staging the ordinary gzip file.
+
+```bash
+set -euo pipefail
+test "$(uname -s)/$(uname -m)" = Linux/x86_64
+img=blast-radius-outcomes
+maps="$PWD/strategies/selectors/impact/maps"
+docker build --platform linux/amd64 -t "$img" .
+docker run --rm --network none --cpus 4 --memory 8g --memory-swap 8g \
+  --read-only --tmpfs /tmp:rw,exec,size=1g,mode=1777 --env HOME=/tmp \
+  --user "$(id -u):$(id -g)" \
+  -v "$PWD/sample/tests.json:/data/tests.json:ro" -v "$maps:/out" \
+  "$img" python -m strategies.build_operator_outcomes \
+    --catalog /data/tests.json --output /out/operator-outcomes.json.gz \
+    --committed-map --all-sites --workers-mode persistent --jobs 4 \
+    --budget-seconds 3600 --encounter-budget 1000000 --compact-records --cache-rewrites
+```
+
+The Dockerfile records the exact archive revision in the image. The map
+header includes that revision, the canonical catalog SHA-256, a digest of
+the pinned SQLGlot source and test tree, the format and tracer versions,
+and the recorder's Python/platform identity. A missing or mismatched
+header disables the map. Regenerate on revision, catalog, test, runtime
+identity or tracer-version changes; pre-header maps must also be regenerated.
+The output has no patch answers or replay proofs. It is **shadow-only**:
+even a complete agreement cannot skip a check without the separate
+isolated-and-ordered replay proof required by active mode.
+
+### Public two-site pilot
+
 Run from this scratch branch, on the same pinned image for tracing and scoring.
 Only patches and the catalog reach the selector; labels stay with the scorer.
 The submitted image command is unchanged.
@@ -131,6 +166,16 @@ trace with `--fast-builtins`. The fast path computes identity, equality,
 and applicable membership from the live operands before reusing an outcome
 row. Enum classes, subclasses, bytes and other operands take the ordinary
 path; no result is inferred from types alone.
+
+`--fast-profile` prefilters exact builtin call objects that the safety profiler
+does not reject. The other profile events, clock checks and audit hooks still run.
+
+`--encounter-budget 1000000` is a separate persistent-recording experiment.
+It counts selected-site comparisons in each test's parent process; on the
+first excess encounter it logs `RWX_OUTCOME_BUDGET <test> <limit>` and omits
+all local trace evidence for that test. The test still runs, the safety hooks
+stay installed, and spawn, collection and ordered batch replay are uncapped.
+Do not treat a budget-limited map as full coverage, even if it lists every site.
 
 Compare attempts and completions as well as elapsed time; a quicker run
 with more rejected traces is not a coverage win. The builder reports elapsed
