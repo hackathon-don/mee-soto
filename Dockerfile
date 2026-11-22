@@ -40,4 +40,4 @@ RUN python -m strategies.selectors.impact.static /opt/sg strategies/selectors/im
     && chmod -R a+rX /app
 # The judge runs the image without flags, so the submitted experiment is set
 # here. Local runs without --experiment still use DEFAULT_CONFIG (baseline).
-CMD ["python", "/app/main.py", "--experiment", "impact-full-optimizer-proof"]
+CMD ["python", "/app/main.py", "--experiment", "impact-variable-workers-matched"]

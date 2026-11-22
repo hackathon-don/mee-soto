@@ -53,7 +53,7 @@ the known failing tests. The same modes run directly as
   using `AllTestsSelector` and `LptScheduler`. No flag preserves the supplied
   config (or `DEFAULT_CONFIG`); `--experiment` replaces it, then `--data`
   overrides its data directory. The judge runs the image without flags, so the
-  `Dockerfile` `CMD` passes `--experiment impact-full-optimizer-proof`; the
+  `Dockerfile` `CMD` passes `--experiment impact-variable-workers-matched`; the
   Makefile targets override `CMD` and pass `EXPERIMENT` instead.
 - `strategies/selectors/` defines `Selector`, `CatalogTest`, and the `Patch`
   record (commit id and diff text). A selector is constructed once with
@@ -64,11 +64,14 @@ the known failing tests. The same modes run directly as
   precomputed file-to-test map only; it does not import the patched source,
   collect tests, launch subprocesses, or probe imports. Unknown, empty,
   malformed, quoted, binary, or unsupported changes select all tests.
-- `ImpactSelector` is opt-in via `Config(selector_cls=ImpactSelector)` (import
-  it from `strategies.selectors.impact`). It maps an AST diff of each patch
-  onto committed line-coverage maps, then runs cheap candidates against the
-  patched tree and selects the ones that fail. See
+- `ImpactSelector` is opt-in via the `impact` experiment. It maps an AST diff
+  of each patch onto committed line-coverage maps, then runs cheap candidates
+  against the patched tree and selects the ones that fail. See
   [Impact selector](#impact-selector).
+- `TableKeySelector` (the `impact-tables` and
+  `impact-tables-variable-workers` experiments) is an `ImpactSelector` that
+  drops candidates which never read the table entry a patch changed. See
+  [Table-entry narrowing](#table-entry-narrowing).
 - `strategies/schedulers/` defines `Scheduler`, constructed once with
   `(durations, config)`. Its `schedule(selected)` method returns worker lists
   containing each selected number exactly once, or `[]` for no tests, dropping
@@ -122,6 +125,16 @@ The leaderboard measures CPU on its own amd64 host, so local estimates are
 only a rough guide. Unreaped background processes are not captured by the
 local process accounting. `ImpactSelector` has
 no judge-compatible reference run in this repository yet.
+
+Selectors on the 30 public patches. The first column is a native arm64
+`make e2e-dev` run, one image for all rows (not judge-compatible); the second
+replays those same picks on the host through `VariableWorkerScheduler`:
+
+| Selector (experiment) | `LptScheduler`, 3 workers | `VariableWorkerScheduler` | Misses |
+| --- | ---: | ---: | ---: |
+| `ImpactSelector` (`impact`) | 120.919 | 105.896 | 0 |
+| `OptimizerTranscriptImpact` (`impact-full-optimizer-proof`, `impact-variable-workers-matched`) | 116.574 | 105.480 | 0 |
+| `TableKeySelector` (`impact-tables`, `impact-tables-variable-workers`) | 111.533 | 96.817 | 0 |
 
 The official starter files are from the
 [track download](https://www.joinbuilders.org/buildathon/tracks/blast-radius/files/blast-radius-sample.tar.gz).
@@ -197,9 +210,52 @@ Pure Git renames are recognized from `rename from`/`rename to` metadata, and
 old-path importers stay candidates even when the probe succeeds. Public sample
 results do not guarantee zero misses on hidden patches.
 
-To run it, use the [MapSelector recipe](#run-the-map-selector) with
-`from strategies.selectors.impact import ImpactSelector` and
-`Config(selector_cls=ImpactSelector)` in the `python -c` argument.
+Run it with `make e2e EXPERIMENT=impact`.
+
+## Table-entry narrowing
+
+SQLGlot keeps most dialect rules in dict literals assigned in class bodies.
+`ImpactSelector` treats an edit to one entry as an edit to the whole
+statement, so every test that touches the class and the table's name is a
+candidate. `TableKeySelector` in `strategies/selectors/impact_tables.py`
+subclasses it and narrows one kind of edit: a patch that changes the value of
+an existing entry of a dict literal assigned directly in a module or class
+body. For that edit it keeps only the tests that read that entry's value.
+
+Everything else gets `ImpactSelector`'s answer unchanged: entries added,
+removed or renamed, a `**` spread, a value that calls something, a table the
+trace did not wrap, and a missing map or one built for another catalog.
+
+The committed map, `strategies/selectors/impact_tables.json.gz`, comes from a
+build-time trace. `tools/trace_tables/sitecustomize.py` rewrites each SQLGlot
+module as it is imported so those dict literals record value reads. Membership
+tests, `len()` and key iteration read no value and are not recorded; anything
+that reads every value at once (`items()`, `copy()`, comparison, a `**`
+spread into another table) counts as reading the whole table. A test that
+fails under the tracer or leaves no dump is always kept. The tracer cannot see
+a read made by C code that bypasses the dict's Python methods.
+
+Rebuild the map after changing the tracer or the catalog:
+
+```sh
+OUT=$(mktemp -d) && cp sample/tests.json "$OUT/"
+docker run --rm --network none --memory 6g \
+  -v "$PWD/tools/trace_tables:/trace:ro" \
+  -v "$PWD/tools/table_trace_driver.py:/tools/table_trace_driver.py:ro" \
+  -v "$OUT:/out" blast-radius-entry-dev \
+  sh -c 'cp -a /opt/sg /src && python /tools/table_trace_driver.py /out/tests.json /out 6'
+python3 tools/build_table_index.py "$OUT" sample/tests.json strategies/selectors/impact_tables.json.gz
+```
+
+The committed map traced all 1,620 catalog tests with none failing. On the
+sample it changes one commit, `4d63`, whose candidates go from 275 to 0.
+`tools/table_mutants.py` and `tools/check_table_narrowing.py` check the
+narrowing on held-out edits: over 80 single-entry mutants across 59 tables,
+narrowing dropped 14,166 of 22,020 candidates, the base candidates produced
+1,406 failures, and none of the dropped tests failed. The checker flagged
+`test_max_nodes` on three mutants when several copies ran at once; it passes
+under pytest on each of those patched trees. These results do not guarantee
+zero misses on hidden patches.
 
 ## Map-only selector
 

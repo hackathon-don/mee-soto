@@ -13,6 +13,7 @@ from strategies.selectors.impact_first_failure import FirstFailureImpact
 from strategies.selectors.impact_fresh_copy import FreshTableCopyImpact
 from strategies.selectors.impact_individual_proof import IndividualProofImpact
 from strategies.selectors.impact_optimizer_transcript import OptimizerTranscriptImpact
+from strategies.selectors.impact_tables import TableKeySelector
 from strategies.selectors.map_narrow import NarrowMapSelector
 from strategies.selectors.map_only import MapSelector
 
@@ -41,6 +42,10 @@ EXPERIMENTS: dict[str, Config] = {
     "impact-full-optimizer-proof": Config(selector_cls=OptimizerTranscriptImpact),
     "impact-variable-workers-matched": Config(
         selector_cls=OptimizerTranscriptImpact, scheduler_cls=VariableWorkerScheduler
+    ),
+    "impact-tables": Config(selector_cls=TableKeySelector),
+    "impact-tables-variable-workers": Config(
+        selector_cls=TableKeySelector, scheduler_cls=VariableWorkerScheduler
     ),
     "impact-first-failure": Config(
         selector_cls=FirstFailureImpact, scheduler_cls=VariableWorkerScheduler
