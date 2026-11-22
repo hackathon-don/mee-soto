@@ -76,7 +76,8 @@ docker_trace --output /out/pilot-verified.json.gz --batch-file /out/batches.json
 # The original manifest still keys the proof, and the build and process limits
 # still apply. The log keeps batch stderr and distinguishes these timeouts.
 # Only the four debug-timing reads in the pinned executor.execute are exempt.
-# If replay reaches another clock read, it is still rejected.
+# The pinned UNIXTOTIME conversion passes an explicit UTC timezone; local
+# timestamp conversions and other clock reads are still rejected.
 
 # Separate, bounded full-site trace. Review coverage as well as elapsed time.
 docker_trace --output /out/full.json.gz --all-sites --batch-file /out/batches.json \

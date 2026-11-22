@@ -28,6 +28,11 @@ from .selectors.outcome_format import EXECUTOR_CLOCK_PATH, OPS, executor_clock_l
 HOOK = "__rwx_record_comparison__"
 BATCH_REJECTION = "RWX_OUTCOME_BATCH_REJECT "
 CAP = 64
+UNIXTOTIME_PATH = "sqlglot/executor/env.py"
+UNIXTOTIME_HASH = "1c032c459b232a7b426a05fca18bb6007fe7d8d56b73b291630f570b5575b23e"
+UNIXTOTIME_LINE = 333
+DATETIME_TYPE = datetime.datetime
+TIMEZONE_TYPE = datetime.timezone
 SIMPLE = (type(None), bool, int, float, str, bytes)
 SIMPLE_TAGS = {id(cls): cls.__name__ for cls in SIMPLE}
 OPERATORS = {
@@ -169,6 +174,7 @@ class Recorder(importlib.abc.MetaPathFinder):
         self.diagnose = diagnose
         self.loading = None
         self.executor_clock = None
+        self.unix_to_time = None
         self.compact = os.environ.get("BR_OUTCOME_COMPACT") == "1"
         cache = os.environ.get("BR_OUTCOME_CODE_CACHE")
         self.cache = Path(cache) if cache else None
@@ -211,6 +217,11 @@ class Recorder(importlib.abc.MetaPathFinder):
                     and frame.f_globals.get("__name__") == "sqlglot.executor"
                     and frame.f_code is self.executor_clock[0] and frame.f_lineno in self.executor_clock[1]):
                 return
+            if (owner is DATETIME_TYPE and name == "fromtimestamp" and frame.f_code is self.unix_to_time
+                    and frame.f_lineno == UNIXTOTIME_LINE
+                    and frame.f_globals.get("__name__") == "sqlglot.executor.env"
+                    and frame.f_globals.get("datetime") is datetime and datetime.timezone is TIMEZONE_TYPE):
+                return
             iso_parse = name == "fromisoformat" and (
                 owner is datetime.date or owner is datetime.datetime or owner is datetime.time
             )
@@ -252,7 +263,7 @@ class Recorder(importlib.abc.MetaPathFinder):
             self.reject(f"unexpected origin for {fullname}: {origin}")
             return spec
         rel = origin.relative_to(self.root).as_posix()
-        if self.paths is None or rel in self.paths or rel == EXECUTOR_CLOCK_PATH:
+        if self.paths is None or rel in self.paths or rel in (EXECUTOR_CLOCK_PATH, UNIXTOTIME_PATH):
             spec.loader = Loader(fullname, spec.origin, self, rel)
         return spec
 
@@ -345,6 +356,14 @@ class Loader(importlib.machinery.SourceFileLoader):
             functions = [part for part in code.co_consts
                          if isinstance(part, CodeType) and part.co_qualname == "execute"]
             self.recorder.executor_clock = (functions[0], lines) if lines and len(functions) == 1 else None
+        elif self.rel == UNIXTOTIME_PATH:
+            self.recorder.unix_to_time = None
+            if sha256(source).hexdigest() == UNIXTOTIME_HASH:
+                functions = [part for part in code.co_consts
+                             if isinstance(part, CodeType) and part.co_name == "<lambda>"
+                             and part.co_firstlineno == UNIXTOTIME_LINE]
+                if len(functions) == 1:
+                    self.recorder.unix_to_time = functions[0]
         self.recorder.skipped.update(skipped)
         return code
 
