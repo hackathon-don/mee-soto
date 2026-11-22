@@ -134,6 +134,8 @@ class TableKeyAnalyzer(Analyzer):
     def __init__(self, index: Index, base_root: str, tables: TableIndex) -> None:
         super().__init__(index, base_root)
         self.tables = tables
+        if DECISION_LOG:
+            self.decision_narrowed = 0
 
     def _diff_mask(self, path: str, mod: str, d: _Diff) -> int:
         base = super()._diff_mask(path, mod, d)
