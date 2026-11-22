@@ -4,10 +4,12 @@ import ast
 import atexit
 import datetime
 import enum
+from hashlib import sha256
 import importlib.abc
 import importlib.machinery
 import inspect
 import json
+import marshal
 import operator
 import os
 import sys
@@ -25,6 +27,7 @@ HOOK = "__rwx_record_comparison__"
 BATCH_REJECTION = "RWX_OUTCOME_BATCH_REJECT "
 CAP = 64
 SIMPLE = (type(None), bool, int, float, str, bytes)
+SIMPLE_TAGS = {id(cls): cls.__name__ for cls in SIMPLE}
 OPERATORS = {
     "Is": operator.is_, "IsNot": operator.is_not, "Eq": operator.eq, "NotEq": operator.ne,
     "In": lambda a, b: operator.contains(b, a),
@@ -82,6 +85,16 @@ def alternate(op, left, right):
     except (TypeError, ValueError, OverflowError):
         return None
     return value if type(value) is bool else None
+
+
+def operand_tag(value):
+    cls = type(value)
+    tag = SIMPLE_TAGS.get(id(cls))
+    if tag is not None:
+        return tag
+    if type(cls) is enum.EnumType and describe(value) is not None:
+        return f"{cls.__module__}.{cls.__qualname__}"
+    return None
 
 
 class Rewrite(ast.NodeTransformer):
@@ -153,6 +166,10 @@ class Recorder(importlib.abc.MetaPathFinder):
         self.unknown = False
         self.diagnose = diagnose
         self.loading = None
+        self.compact = os.environ.get("BR_OUTCOME_COMPACT") == "1"
+        cache = os.environ.get("BR_OUTCOME_CODE_CACHE")
+        self.cache = Path(cache) if cache else None
+        self.rewrite_only = os.environ.get("BR_OUTCOME_PROFILE") == "rewrite"
 
     def reject(self, reason):
         if not self.unknown and self.diagnose:
@@ -233,17 +250,24 @@ class Recorder(importlib.abc.MetaPathFinder):
         return spec
 
     def observe(self, key, op, left, right, chain):
-        if not self.unknown and (key not in self.rows or self.rows[key] is not None):
+        if not self.rewrite_only and not self.unknown and self.rows.get(key, ()) is not None:
             try:
-                a, b = describe(left), describe(right)
+                describe_operand = operand_tag if self.compact else describe
+                a, b = describe_operand(left), describe_operand(right)
                 if a is None or b is None:
                     if key is not None:
                         self.rows[key] = None
                     if chain:
                         self.reject(f"unsupported chained comparison operand at {key or op}")
                 elif key is not None:
-                    row = json.dumps([a, b, left is right, [alternate(o, left, right) for o in OPS]],
-                                     separators=(",", ":"))
+                    same = left is right
+                    if self.compact:
+                        outcomes = (same, not same, alternate("Eq", left, right),
+                                    alternate("NotEq", left, right), alternate("In", left, right))
+                        row = (a, b, same, outcomes)
+                    else:
+                        row = json.dumps([a, b, same, [alternate(o, left, right) for o in OPS]],
+                                         separators=(",", ":"))
                     seen = self.rows.setdefault(key, set())
                     seen.add(row)
                     if len(seen) > CAP:
@@ -256,8 +280,14 @@ class Recorder(importlib.abc.MetaPathFinder):
         return OPERATORS[op](left, right)
 
     def report(self):
-        return {"pid": os.getpid(), "sites": {k: None if v is None else sorted(v)
-                                             for k, v in self.rows.items()},
+        def encode(values):
+            if values is None:
+                return None
+            if self.compact:
+                return sorted(json.dumps(v, separators=(",", ":")) for v in values)
+            return sorted(values)
+
+        return {"pid": os.getpid(), "sites": {k: encode(v) for k, v in self.rows.items()},
                 "skipped": sorted(self.skipped)}
 
     def merge(self, report):
@@ -267,6 +297,9 @@ class Recorder(importlib.abc.MetaPathFinder):
                 self.rows[key] = None
             elif key not in self.rows or self.rows[key] is not None:
                 seen = self.rows.setdefault(key, set())
+                if self.compact:
+                    values = [(a, b, same, tuple(outcomes))
+                              for a, b, same, outcomes in map(json.loads, values)]
                 seen.update(values)
                 if len(seen) > CAP:
                     self.rows[key] = None
@@ -287,16 +320,36 @@ class Loader(importlib.machinery.SourceFileLoader):
             source = self.get_data(self.path)
         finally:
             self.recorder.loading = None
-        tree = ast.parse(source, self.path)
-        names = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
-        names.update(node.arg for node in ast.walk(tree) if isinstance(node, ast.arg))
-        if HOOK in names:
+        artifact = None
+        if self.recorder.cache is not None:
+            try:
+                digest, optimize, code, skipped, collision = marshal.loads(
+                    (self.recorder.cache / self.rel).read_bytes())
+                if digest == sha256(source).digest() and optimize == sys.flags.optimize:
+                    artifact = code, skipped, collision
+            except (OSError, EOFError, ValueError, TypeError):
+                pass
+        code, skipped, collision = (artifact if artifact is not None else
+                                    rewrite_code(source, self.path, self.rel, self.recorder.targets))
+        if collision:
             self.recorder.reject(f"comparison observer name collision in {self.rel}")
-            return compile(source, self.path, "exec", dont_inherit=True)
-        rewrite = Rewrite(self.rel, names, self.recorder.targets)
-        tree = rewrite.visit(tree)
-        self.recorder.skipped.update(rewrite.skipped)
-        return compile(ast.fix_missing_locations(tree), self.path, "exec", dont_inherit=True)
+        self.recorder.skipped.update(skipped)
+        return code
+
+
+def rewrite_code(source, path, rel, targets):
+    tree = ast.parse(source, path)
+    names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name):
+            names.add(node.id)
+        elif isinstance(node, ast.arg):
+            names.add(node.arg)
+    if HOOK in names:
+        return compile(source, path, "exec", dont_inherit=True), (), True
+    rewrite = Rewrite(rel, names, targets)
+    tree = rewrite.visit(tree)
+    return compile(ast.fix_missing_locations(tree), path, "exec", dont_inherit=True), sorted(rewrite.skipped), False
 
 
 class Workers:
@@ -359,7 +412,8 @@ def worker(root, result, sites, kwargs):
 
     @atexit.register
     def report():
-        if code == 0 and not recorder.unknown and sys.getprofile() == recorder.profile:
+        if (code == 0 and (recorder.rewrite_only or not recorder.unknown)
+                and sys.getprofile() == recorder.profile):
             Path(result).write_text(json.dumps(recorder.report()))
 
     spawn._main = main
@@ -368,9 +422,11 @@ def worker(root, result, sites, kwargs):
 
 def trace(root, node, result, sites):
     os.chdir(root)
+    plain = os.environ.get("BR_OUTCOME_PROFILE") == "plain"
     recorder = Recorder(root, None if sites is None else set(json.loads(Path(sites).read_text())))
-    recorder.install()
-    workers = Workers(root, result, sites)
+    if not plain:
+        recorder.install()
+    workers = None if plain else Workers(root, result, sites)
     import pytest
 
     class Outcome:
@@ -385,9 +441,14 @@ def trace(root, node, result, sites):
 
     outcome = Outcome()
     code = pytest.main([node, "-q", "-p", "no:cacheprovider"], plugins=[outcome])
-    if (not code and not outcome.bad and outcome.phases == {"setup", "call", "teardown"}
-            and workers.merge(recorder) and not recorder.unknown and sys.getprofile() == recorder.profile):
-        result.write_text(json.dumps(recorder.report()))
+    if not code and not outcome.bad and outcome.phases == {"setup", "call", "teardown"}:
+        if plain:
+            result.write_text("{}")
+        elif workers.merge(recorder) and sys.getprofile() == recorder.profile:
+            if recorder.rewrite_only:
+                result.write_text("{}")
+            elif not recorder.unknown:
+                result.write_text(json.dumps(recorder.report()))
 
 
 def trace_batch(root, manifest, result, sites):

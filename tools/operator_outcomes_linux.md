@@ -73,9 +73,49 @@ docker_trace --output /out/pilot-verified.json.gz --batch-file /out/batches.json
   "${pilot[@]}" 2>&1 | tee "$out/pilot-verified-build.log"
 
 # Separate, bounded full-site trace. Review coverage as well as elapsed time.
-docker_trace --output /out/full.json.gz --all-sites --batch-file /out/batches.json --budget-seconds 540 \
+docker_trace --output /out/full.json.gz --all-sites --batch-file /out/batches.json \
+  --compact-records --cache-rewrites --budget-seconds 540 \
   2>&1 | tee "$out/full-build.log"
 ```
+
+### Fixed Linux timing subset
+
+Run the following separately from the full trace. All four runs use the same
+48 catalog tests spread across the recorded duration range, including the
+shortest and longest. The first two modes cannot write a map. Compare plain
+test/interpreter cost, rewrite and hook cost with the observer passing through,
+and total recording cost with and without the fast paths.
+
+```bash
+profile_tests=()
+while read -r number; do profile_tests+=(--test-number "$number"); done < <(
+  python3 - <<'PY'
+import json
+from pathlib import Path
+
+tests = sorted(json.loads(Path("sample/tests.json").read_text())["tests"],
+               key=lambda test: (test["seconds"], test["number"]))
+for i in range(48):
+    print(tests[i * (len(tests) - 1) // 47]["number"])
+PY
+)
+test "${#profile_tests[@]}" -eq 96
+docker_trace --all-sites "${profile_tests[@]}" --profile-mode plain | tee "$out/profile-plain.log"
+docker_trace --all-sites "${profile_tests[@]}" --profile-mode rewrite | tee "$out/profile-rewrite.log"
+docker_trace --all-sites "${profile_tests[@]}" --output /out/profile-default.json.gz \
+  | tee "$out/profile-default.log"
+docker_trace --all-sites "${profile_tests[@]}" --compact-records --cache-rewrites \
+  --output /out/profile-fast.json.gz | tee "$out/profile-fast.log"
+```
+
+Compare attempts and completions as well as elapsed time; a quicker run
+with more rejected traces is not a coverage win. The builder reports elapsed
+wall time and, on cgroup v2, average CPU cores used including subprocesses.
+The job pool launches at most four fresh interpreter processes, one per test
+or ordered batch. Tests can also spawn their own workers. The private bytecode
+cache is reused by subprocesses and verified against source bytes, but test
+state is not shared. Compact records deduplicate outcome vectors, not merely
+operand types. Every encounter is still checked.
 
 After reviewing shadow coverage and batch completeness, choose one map.
 Active mode needs a complete replay of the exact ordered batch and import

@@ -5,7 +5,9 @@ import ast
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
 import gzip
+from hashlib import sha256
 import json
+import marshal
 import os
 from pathlib import Path
 import signal
@@ -16,7 +18,7 @@ import time
 
 from .selectors.map_format import catalog_records, catalog_sha256
 from .selectors.outcome_format import OPS, identity, site_id, tree_digest
-from .trace_operator_outcomes import BATCH_REJECTION
+from .trace_operator_outcomes import BATCH_REJECTION, rewrite_code
 
 
 def sites(root, requested):
@@ -42,19 +44,52 @@ def sites(root, requested):
     return selected
 
 
-def collect(root, tests, requested, indexed, jobs, budget, timeout, batches):
+def build_code_cache(root, cache, targets):
+    paths = (sorted((root / "sqlglot").rglob("*.py")) if targets is None else
+             [root / rel for rel in sorted({site.split(":", 1)[0] for site in targets})])
+    for path in paths:
+        rel = path.relative_to(root).as_posix()
+        try:
+            source = path.read_bytes()
+            code, skipped, collision = rewrite_code(source, str(path), rel, targets)
+            dest = cache / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(marshal.dumps((sha256(source).digest(), sys.flags.optimize, code, skipped, collision)))
+        except (OSError, SyntaxError, ValueError):
+            continue
+
+
+def cgroup_cpu_seconds():
+    try:
+        stat = Path("/sys/fs/cgroup/cpu.stat").read_text()
+        for line in stat.splitlines():
+            if line.startswith("usage_usec "):
+                return int(line.split()[1]) / 1_000_000
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def collect(root, tests, requested, indexed, jobs, budget, timeout, batches, compact, cache_code, profile):
     deadline = time.monotonic() + budget
     env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1]),
                PYTHONDONTWRITEBYTECODE="1", SKIP_INTEGRATION="0", PYTHONHASHSEED="0",
                OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1",
                MKL_NUM_THREADS="1", PYTEST_DISABLE_PLUGIN_AUTOLOAD="1")
+    env.update(BR_OUTCOME_COMPACT="1" if compact else "0", BR_OUTCOME_PROFILE=profile or "",
+               BR_OUTCOME_CODE_CACHE="")
     with tempfile.TemporaryDirectory() as temp:
         directory = Path(temp)
+        targets = None if requested is None else set(indexed)
         flags = []
-        if requested is not None:
-            targets = directory / "sites.json"
-            targets.write_text(json.dumps(sorted(indexed)))
-            flags = [str(targets)]
+        if targets is not None:
+            sites_path = directory / "sites.json"
+            sites_path.write_text(json.dumps(sorted(targets)))
+            flags = [str(sites_path)]
+        if cache_code:
+            cache = directory / "bytecode"
+            build_code_cache(root, cache, targets)
+            env["BR_OUTCOME_CODE_CACHE"] = str(cache)
 
         work = []
         for index, batch in enumerate(batches):
@@ -65,6 +100,7 @@ def collect(root, tests, requested, indexed, jobs, budget, timeout, batches):
 
         def run(item):
             mode, key, target = item
+            started = time.monotonic()
             report = None
             batch = batches[key] if mode == "batch" else None
 
@@ -76,7 +112,7 @@ def collect(root, tests, requested, indexed, jobs, budget, timeout, batches):
             if time.monotonic() >= deadline:
                 if batch is not None:
                     rejected("build budget expired before batch started")
-                return mode, key, report
+                return mode, key, report, None
             result = directory / f"{mode}-{key}.json"
             argv = [sys.executable, "-m", "strategies.trace_operator_outcomes",
                     mode, str(root), target, str(result), *flags]
@@ -108,12 +144,19 @@ def collect(root, tests, requested, indexed, jobs, budget, timeout, batches):
                     reason = next((line.removeprefix(BATCH_REJECTION).rstrip()
                                    for line in stderr if line.startswith(BATCH_REJECTION)), reason)
                     rejected(reason)
-            return mode, key, report
+            return mode, key, report, time.monotonic() - started
 
         completed, skipped, rows, verified = [], set(), {}, []
+        attempted, child_seconds = 0, 0.0
         with ThreadPoolExecutor(jobs) as pool:
-            for mode, number, report in pool.map(run, work):
+            for mode, number, report, seconds in pool.map(run, work):
+                if mode == "test" and seconds is not None:
+                    attempted += 1
+                    child_seconds += seconds
                 if report is None:
+                    continue
+                if profile:
+                    completed.append(number)
                     continue
                 skipped.update(report["skipped"])
                 observed = {key: None if values is None else [json.loads(value) for value in values]
@@ -124,24 +167,34 @@ def collect(root, tests, requested, indexed, jobs, budget, timeout, batches):
                     completed.append(number)
                     for key, values in observed.items():
                         rows.setdefault(key, {})[number] = values
-    return completed, sorted(skipped), rows, verified
+    return completed, sorted(skipped), rows, verified, attempted, child_seconds
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-root", type=Path, default=Path("/opt/sg"))
     parser.add_argument("--catalog", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--output", type=Path)
     scope = parser.add_mutually_exclusive_group(required=True)
     scope.add_argument("--site", action="append", help="path:line, or exact path:line:column:link")
     scope.add_argument("--all-sites", action="store_true")
     parser.add_argument("--test-number", type=int, action="append")
     parser.add_argument("--batch-file", type=Path, help="ordered verification batches from a shadow run")
+    parser.add_argument("--compact-records", action="store_true", help="dedupe type, identity and outcome vectors")
+    parser.add_argument("--cache-rewrites", action="store_true", help="compile each rewritten module once per build")
+    parser.add_argument("--profile-mode", choices=("plain", "rewrite"),
+                        help="time plain tests or rewritten tests without recording; never write a map")
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--budget-seconds", type=float, default=540)
     parser.add_argument("--timeout-seconds", type=float, default=120)
     args = parser.parse_args()
+    if args.profile_mode:
+        if args.output or args.batch_file or args.compact_records or (args.profile_mode == "plain" and args.cache_rewrites):
+            parser.error("profile modes do not accept map output, batches or records; only rewrite mode can cache")
+    elif args.output is None:
+        parser.error("--output is required to build a map")
     start = time.monotonic()
+    cpu_start = cgroup_cpu_seconds()
     root = args.source_root.resolve()
     catalog = json.loads(args.catalog.read_text())["tests"]
     tests = [test for test in catalog if not args.test_number or test["number"] in args.test_number]
@@ -158,11 +211,22 @@ def main():
                 or len({case[0] for case in cases}) != len(cases)
                 or any(type(module) is not str for module in batch["imports"])):
             parser.error("invalid verification batch")
-    completed, skipped, rows, verified = collect(root, tests, args.site, indexed, args.jobs,
-                                                 args.budget_seconds, args.timeout_seconds, batches)
+    completed, skipped, rows, verified, attempted, child_seconds = collect(
+        root, tests, args.site, indexed, args.jobs, args.budget_seconds, args.timeout_seconds,
+        batches, args.compact_records, args.cache_rewrites, args.profile_mode)
+    elapsed = time.monotonic() - start
+    cpu_end = cgroup_cpu_seconds()
+    cpu = cpu_end - cpu_start if cpu_start is not None and cpu_end is not None else None
+    utilization = f"; cgroup CPU {cpu:.2f}s ({cpu / elapsed:.2f} cores average)" if cpu is not None else ""
+    print(f"Trace work ({args.profile_mode or 'record'}): {attempted}/{len(tests)} tests attempted, "
+          f"{len(completed)} complete, {child_seconds:.2f}s summed child wall, "
+          f"{elapsed:.2f}s elapsed with {args.jobs} jobs{utilization}")
+    if args.profile_mode:
+        return
     payload = {"identity": identity(), "tree": tree_digest(root),
                "catalog": catalog_sha256(catalog_records(catalog)), "complete": completed,
-               "skipped": skipped, "sites": indexed, "rows": rows, "batches": verified}
+               "skipped": skipped, "sites": indexed, "rows": rows, "batches": verified,
+               "compact": args.compact_records}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(gzip.compress(json.dumps(payload, separators=(",", ":")).encode(), mtime=0))
     print(f"Comparison map: {len(completed)}/{len(tests)} complete, "
