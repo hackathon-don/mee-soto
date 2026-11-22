@@ -152,6 +152,12 @@ For a local diagnostic run on native Linux amd64, use
 to stderr and the timed CI run includes logging overhead. The default and judge
 entrypoints do not enable this instrumentation.
 
+For an opt-in selector decision log, run
+`make e2e EXPERIMENT=<name> DECISION_LOG=1`. Independently of CPU diagnostics,
+stderr contains `RWX_DECISION_V1 {json}` lines for each pre-narrowing candidate
+and a per-patch summary. Records describe the final kept/dropped verdict, rule,
+and recorded verification CPU (or null). It is off in default and scored runs.
+
 ## Benchmark release
 
 **Benchmark release** runs on every push to main and benchmarks every

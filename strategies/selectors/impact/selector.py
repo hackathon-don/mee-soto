@@ -28,6 +28,7 @@ PARALLEL = int(os.environ.get("BR_PARALLEL", "2"))
 WALL_BUDGET = float(os.environ.get("BR_WALL_BUDGET", "140"))
 HARD_GRACE = float(os.environ.get("BR_HARD_GRACE", "20"))
 IMPORT_PROBE_TIMEOUT = 2.0
+DECISION_LOG = os.environ.get("BR_DECISION_LOG") == "1"
 
 # Tests we never run in-process: they spawn process pools of their own or are
 # too slow to be worth verifying. They are included whenever they are candidates.
@@ -139,6 +140,7 @@ class Plan:
         "cid", "include", "run", "notes", "failed", "root", "error", "cpu", "subsets", "fixture_edits",
         "est_run_ms", "wall", "deferred", "child_cpu", "pending_imports", "failed_imports",
         "diagnostics",
+        "decisions",
     )
 
     def __init__(self, cid):
@@ -159,6 +161,7 @@ class Plan:
         self.pending_imports: dict[str, int] = {}
         self.failed_imports: set[int] = set()
         self.diagnostics: dict | None = None
+        self.decisions = {} if DECISION_LOG else None
 
 
 def choose(
@@ -229,6 +232,10 @@ def choose(
         else:
             include = include | set(defer)
     plan.include = include
+    if DECISION_LOG:
+        for n in set(cand) | set(must):
+            rule = "must_fail" if n in must else "never_run" if n in never and n in include else "cheaper_to_include" if n in include else "check_passed"
+            plan.decisions[n] = (rule, None)
     # Cheapest first, so early failures are found cheaply (see STOP_AFTER).
     plan.run = sorted(run, key=lambda n: (cpu[n], n))
     plan.est_run_ms = (COMMIT_OVERHEAD_MS + est) if plan.run else 0
@@ -362,6 +369,9 @@ def run_all(plans: list[Plan], ids, limits, deadline: float):
             plan, tests = queue.pop(0)
             if time.time() > deadline:
                 plan.include |= set(tests)
+                if DECISION_LOG:
+                    for n in tests:
+                        plan.decisions[n] = ("included_unrun", "out of time")
                 plan.notes.append("out of time: included unrun")
                 continue
             ch = spawn_child(plan, tests, ids, limits)
@@ -432,9 +442,15 @@ def run_all(plans: list[Plan], ids, limits, deadline: float):
                     ch.plan.include.add(ch.current)
                 ch.current = None
                 ch.plan.notes.append("hard deadline: included unrun")
+                if DECISION_LOG:
+                    for n in ch.pending:
+                        ch.plan.decisions[n] = ("included_unrun", "hard deadline")
                 finish(ch, active, queue, now)
             for plan, tests in queue:
                 plan.include |= set(tests)
+                if DECISION_LOG:
+                    for n in tests:
+                        plan.decisions[n] = ("included_unrun", "hard deadline")
             queue.clear()
             continue
         for fd, ch in list(active.items()):
@@ -487,6 +503,8 @@ def finish(ch: Child, active, queue, now):
     if ch.current is not None:
         # Crashed or hung inside a test: that test fails; carry on with the rest.
         ch.plan.failed.add(ch.current)
+        if DECISION_LOG:
+            ch.plan.decisions[ch.current] = ("child_died_in_test", "child crashed or hung inside test")
         rest = [n for n in ch.pending if n != ch.current]
         ch.plan.notes.append(f"child died in {ch.current}")
         if rest:
@@ -494,6 +512,13 @@ def finish(ch: Child, active, queue, now):
     else:
         # Died outside a test (import, fixtures): include what is left unrun.
         ch.plan.include |= set(ch.pending)
+        if DECISION_LOG:
+            cause = (f"stopped after {len(ch.plan.failed)} failures" if ch.stopped else
+                     "first-failure stop" if (ch.plan.failed or ch.plan.failed_imports) else
+                     "child died outside a test")
+            for n in ch.pending:
+                rule, detail = ch.plan.decisions.get(n, ("included_unrun", None))
+                ch.plan.decisions[n] = ("included_unrun", detail or cause)
         ch.plan.notes.append(f"child died outside a test; {len(ch.pending)} included unrun")
 
 
@@ -542,10 +567,16 @@ def analyze_commit(ctx: Context, cid: str, text: str) -> Analysis:
 
     ms, ids, cpu, never, ix = ctx.ms, ctx.ids, ctx.cpu, ctx.never, ctx.ix
     plan = Plan(cid)
+    if DECISION_LOG:
+        ctx.an.decision_narrowed = 0
     imp = ctx.an.analyze(parse_patch(text))
     plan.notes.extend(imp.notes)
     candidate_mask = imp.candidates
     cand = [n for n in bits(candidate_mask) if n in ms]
+    if DECISION_LOG:
+        for n in bits(ctx.an.decision_narrowed & ~candidate_mask):
+            if n in ms:
+                plan.decisions[n] = ("table_key_narrowing", None)
     plan.pending_imports = _filter_import_masks(imp.import_checks, imp.import_fail_masks, ms)
     must = [n for n in bits(imp.must_fail) if n in ms]
     commit_never, commit_cpu = never, cpu
@@ -569,6 +600,8 @@ def analyze_commit(ctx: Context, cid: str, text: str) -> Analysis:
                 commit_cpu[tp["test"]] = int(TPCDS_SETUP_MS * CPU_FACTOR + 1000 * sum(tp["cpu"].get(i, 1.0) for i in qs))
             else:
                 cand = [n for n in cand if n != tp["test"]]
+                if DECISION_LOG:
+                    plan.decisions[tp["test"]] = ("tpcds_fixture_unaffected", None)
             plan.notes.append(f"tpc-ds fixture edit: queries {qs}")
     if imp.fixture_edits and not imp.code_effect:
         # Only fixture items changed: re-check just those items.
@@ -621,6 +654,8 @@ class ImpactSelector:
                 plan = Plan(cid)
                 plan.error = repr(e)
                 plan.include = set(ms)
+                if DECISION_LOG:
+                    plan.decisions = {n: ("analysis_failed", plan.error) for n in ms}
                 log(f"{cid}: analysis failed, running everything: {e!r}")
             if diagnostics:
                 plan.diagnostics = {"timed": [], "incomplete_children": 0, "checked": []}
@@ -631,6 +666,8 @@ class ImpactSelector:
             run_all(plans, ids, limits, self.start_wall + WALL_BUDGET)
 
         selected = dict(self._selected(plans))
+        if DECISION_LOG:
+            self._log_decisions(plans, selected)
         if diagnostics:
             for plan in plans:
                 print(
@@ -642,6 +679,39 @@ class ImpactSelector:
                     file=sys.stderr,
                 )
         return selected
+
+    def _log_decisions(self, plans, selected):
+        for plan in plans:
+            kept = set(selected[plan.cid])
+            unresolved = set()
+            for mask in plan.pending_imports.values():
+                unresolved.update(bits(mask))
+            for n, (rule, detail) in sorted(plan.decisions.items()):
+                if n in plan.failed_imports:
+                    rule = "import_probe_failed"
+                elif n in unresolved:
+                    rule = "import_probe_unresolved"
+                elif n in plan.failed and rule != "child_died_in_test":
+                    rule = "failed_check"
+                elif n in plan.deferred:
+                    rule = "deferred_included" if n in kept else "deferred_skipped"
+                elif n in plan.run and n in plan.include:
+                    rule = "included_unrun"
+                    detail = detail or "; ".join(plan.notes)
+                if n not in kept and n in plan.include | plan.failed | plan.failed_imports:
+                    if rule != "proven_unaffected":
+                        rule, detail = "proven_unaffected", type(self).__name__
+                record = {"commit": plan.cid, "test": n, "id": self.ids[n],
+                          "verdict": "kept" if n in kept else "dropped", "rule": rule,
+                          "check_cpu": plan.cpu.get(n)}
+                if detail:
+                    record["detail"] = detail
+                log("RWX_DECISION_V1 " + json.dumps(record, separators=(",", ":")))
+            count = len(plan.decisions)
+            log("RWX_DECISION_V1 " + json.dumps({"commit": plan.cid, "summary": {
+                "candidates": count, "kept": len(kept), "dropped": count - len(kept),
+                "check_cpu": sum(plan.cpu.values()),
+            }}, separators=(",", ":")))
 
     @staticmethod
     def _selected(plans: list[Plan]) -> Iterator[tuple[str, list[int]]]:
