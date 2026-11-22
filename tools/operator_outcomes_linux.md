@@ -84,9 +84,9 @@ docker_trace --output /out/full.json.gz --all-sites --batch-file /out/batches.js
 
 ### Fixed Linux timing subset
 
-Run the following separately from the full trace. All four runs use the same
+Run the following separately from the full trace. All six runs use the same
 48 catalog tests spread across the recorded duration range, including the
-shortest and longest. The first two modes cannot write a map. Compare plain
+shortest and longest. The profile modes cannot write a map. Compare plain
 test/interpreter cost, rewrite and hook cost with the observer passing through,
 and total recording cost with and without the fast paths.
 
@@ -110,6 +110,11 @@ docker_trace --all-sites "${profile_tests[@]}" --output /out/profile-default.jso
   | tee "$out/profile-default.log"
 docker_trace --all-sites "${profile_tests[@]}" --compact-records --cache-rewrites \
   --output /out/profile-fast.json.gz | tee "$out/profile-fast.log"
+docker_trace --all-sites "${profile_tests[@]}" --workers-mode persistent --profile-mode plain \
+  | tee "$out/profile-plain-persistent.log"
+docker_trace --all-sites "${profile_tests[@]}" --workers-mode persistent --compact-records --cache-rewrites \
+  --output /out/profile-persistent.json.gz 2>&1 | tee "$out/profile-persistent.log"
+python3 -m tools.compare_operator_outcomes "$out/profile-fast.json.gz" "$out/profile-persistent.json.gz"
 ```
 
 Compare attempts and completions as well as elapsed time; a quicker run
@@ -118,8 +123,25 @@ wall time and, on cgroup v2, average CPU cores used including subprocesses.
 The job pool launches at most four fresh interpreter processes, one per test
 or ordered batch. Tests can also spawn their own workers. The private bytecode
 cache is reused by subprocesses and verified against source bytes, but test
-state is not shared. Compact records deduplicate outcome vectors, not merely
+state is not shared in isolated mode. Compact records deduplicate outcome vectors, not merely
 operand types. Every encounter is still checked.
+
+With `--workers-mode persistent`, each of the four default jobs instead runs
+one deterministic pytest shard. The shard uses the remaining build budget,
+not the 120 s per-process timeout; standalone ordered batch replay retains
+that timeout. On a crash the attempted prefix is unknown; the unstarted
+suffix can restart in a clean process. Collection and spawned-worker
+observations are pooled globally and can veto a test's agreement. No local
+observation means unknown, including comparisons hidden by a prior test's
+cache. Persistent maps are shadow-only, and any replay results are stored
+separately from active batch proofs. Active omission still needs isolated
+evidence and the exact ordered batch replay.
+
+The comparator lists persistent agreements not backed by isolated evidence,
+even though the active selector cannot omit from the persistent map. Require
+zero findings before considering shared-process evidence for a future proof
+gate. Review both maps' completion and observation counts too: zero findings
+from an empty persistent map is not a validation.
 
 After reviewing shadow coverage and batch completeness, choose one map.
 Active mode needs a complete replay of the exact ordered batch and import

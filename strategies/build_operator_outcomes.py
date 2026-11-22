@@ -18,7 +18,7 @@ import time
 
 from .selectors.map_format import catalog_records, catalog_sha256
 from .selectors.outcome_format import OPS, identity, site_id, tree_digest
-from .trace_operator_outcomes import BATCH_REJECTION, rewrite_code
+from .trace_operator_outcomes import BATCH_REJECTION, CAP, rewrite_code
 
 
 def sites(root, requested):
@@ -70,7 +70,8 @@ def cgroup_cpu_seconds():
     return None
 
 
-def collect(root, tests, requested, indexed, jobs, budget, timeout, batches, compact, cache_code, profile):
+def collect(root, tests, requested, indexed, jobs, budget, timeout, batches, compact, cache_code, profile,
+            persistent):
     deadline = time.monotonic() + budget
     env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1]),
                PYTHONDONTWRITEBYTECODE="1", SKIP_INTEGRATION="0", PYTHONHASHSEED="0",
@@ -96,10 +97,63 @@ def collect(root, tests, requested, indexed, jobs, budget, timeout, batches, com
             manifest = directory / f"batch-{index}-input.json"
             manifest.write_text(json.dumps(batch))
             work.append(("batch", index, str(manifest)))
-        work.extend(("test", test["number"], test["id"]) for test in tests)
+        if persistent:
+            shards = [[] for _ in range(min(jobs, len(tests)))]
+            for index, test in enumerate(tests):
+                shards[index % len(shards)].append((test["number"], test["id"]))
+            work = [("shard", index, sorted(shard, key=lambda case: case[1]))
+                    for index, shard in enumerate(shards)] + work
+        else:
+            work.extend(("test", test["number"], test["id"]) for test in tests)
+
+        def run_shard(index, cases):
+            started = time.monotonic()
+            attempted, restart = 0, 0
+            stalled = False
+            while cases and time.monotonic() < deadline:
+                base = directory / f"shard-{index}-{restart}"
+                manifest, result = base.with_suffix(".input"), base.with_suffix(".json")
+                manifest.write_text(json.dumps(cases))
+                argv = [sys.executable, "-m", "strategies.trace_operator_persistent",
+                        str(root), str(manifest), str(result), *flags]
+                timed_out = False
+                with subprocess.Popen(argv, cwd=root, env=dict(env, PYTHON_CPU_COUNT="2"),
+                                      stdout=subprocess.DEVNULL, start_new_session=True) as child:
+                    try:
+                        code = child.wait(timeout=max(0, deadline - time.monotonic()))
+                    except subprocess.TimeoutExpired:
+                        timed_out, code = True, None
+                    finally:
+                        if child.returncode != 0:
+                            try:
+                                os.killpg(child.pid, signal.SIGKILL)
+                            except ProcessLookupError:
+                                pass
+                progress = result.with_suffix(".started")
+                seen = progress.read_text().splitlines() if progress.is_file() else []
+                if seen != [str(number) for number, _ in cases[:len(seen)]]:
+                    break
+                attempted += len(seen)
+                if code == 0 and result.is_file() and len(seen) == len(cases):
+                    try:
+                        report = json.loads(result.read_text())
+                    except (OSError, ValueError):
+                        break
+                    return "shard", attempted, report, time.monotonic() - started
+                if code == 0 or timed_out or (not seen and stalled):
+                    break
+                print(f"Outcome shard {index}: worker exited with status {code}; "
+                      f"{len(seen)} attempted tests remain unknown, restarting the unstarted suffix",
+                      file=sys.stderr, flush=True)
+                cases = cases[len(seen):]
+                stalled = not seen
+                restart += 1
+            return "shard", attempted, None, time.monotonic() - started
 
         def run(item):
             mode, key, target = item
+            if mode == "shard":
+                return run_shard(key, target)
             started = time.monotonic()
             report = None
             batch = batches[key] if mode == "batch" else None
@@ -154,10 +208,35 @@ def collect(root, tests, requested, indexed, jobs, budget, timeout, batches, com
                             print(line, file=sys.stderr, end="", flush=True)
             return mode, key, report, time.monotonic() - started
 
-        completed, skipped, rows, verified = [], set(), {}, []
+        completed, skipped, rows, verified, global_rows = [], set(), {}, [], {}
         attempted, child_seconds = 0, 0.0
         with ThreadPoolExecutor(jobs) as pool:
             for mode, number, report, seconds in pool.map(run, work):
+                if mode == "shard":
+                    attempted += number
+                    child_seconds += seconds
+                    if report is None:
+                        continue
+                    completed.extend(report["complete"])
+                    if profile:
+                        continue
+                    skipped.update(report["skipped"])
+                    for case, sites_seen in report["rows"].items():
+                        for site, values in sites_seen.items():
+                            if site in indexed:
+                                rows.setdefault(site, {})[case] = (None if values is None else
+                                                                    [json.loads(value) for value in values])
+                    for site, values in report["global"].items():
+                        if site not in indexed or global_rows.get(site, ()) is None:
+                            continue
+                        if values is None:
+                            global_rows[site] = None
+                        else:
+                            seen = global_rows.setdefault(site, set())
+                            seen.update(values)
+                            if len(seen) > CAP:
+                                global_rows[site] = None
+                    continue
                 if mode == "test" and seconds is not None:
                     attempted += 1
                     child_seconds += seconds
@@ -175,7 +254,9 @@ def collect(root, tests, requested, indexed, jobs, budget, timeout, batches, com
                     completed.append(number)
                     for key, values in observed.items():
                         rows.setdefault(key, {})[number] = values
-    return completed, sorted(skipped), rows, verified, attempted, child_seconds
+    global_rows = {site: None if values is None else [json.loads(value) for value in sorted(values)]
+                   for site, values in global_rows.items()}
+    return completed, sorted(skipped), rows, verified, attempted, child_seconds, global_rows
 
 
 def main():
@@ -193,9 +274,12 @@ def main():
     parser.add_argument("--profile-mode", choices=("plain", "rewrite"),
                         help="time plain tests or rewritten tests without recording; never write a map")
     parser.add_argument("--jobs", type=int, default=4)
+    parser.add_argument("--workers-mode", choices=("isolated", "persistent"), default="isolated")
     parser.add_argument("--budget-seconds", type=float, default=540)
     parser.add_argument("--timeout-seconds", type=float, default=120)
     args = parser.parse_args()
+    if args.jobs < 1:
+        parser.error("--jobs must be positive")
     if args.profile_mode:
         if args.output or args.batch_file or args.compact_records or (args.profile_mode == "plain" and args.cache_rewrites):
             parser.error("profile modes do not accept map output, batches or records; only rewrite mode can cache")
@@ -206,7 +290,7 @@ def main():
     root = args.source_root.resolve()
     catalog = json.loads(args.catalog.read_text())["tests"]
     tests = [test for test in catalog if not args.test_number or test["number"] in args.test_number]
-    tests.sort(key=lambda test: -test["seconds"])
+    tests.sort(key=lambda test: (-test["seconds"], test["number"]))
     if not tests:
         parser.error("no catalog tests selected")
     indexed = sites(root, args.site)
@@ -219,9 +303,10 @@ def main():
                 or len({case[0] for case in cases}) != len(cases)
                 or any(type(module) is not str for module in batch["imports"])):
             parser.error("invalid verification batch")
-    completed, skipped, rows, verified, attempted, child_seconds = collect(
+    persistent = args.workers_mode == "persistent"
+    completed, skipped, rows, verified, attempted, child_seconds, global_rows = collect(
         root, tests, args.site, indexed, args.jobs, args.budget_seconds, args.timeout_seconds,
-        batches, args.compact_records, args.cache_rewrites, args.profile_mode)
+        batches, args.compact_records, args.cache_rewrites, args.profile_mode, persistent)
     elapsed = time.monotonic() - start
     cpu_end = cgroup_cpu_seconds()
     cpu = cpu_end - cpu_start if cpu_start is not None and cpu_end is not None else None
@@ -233,8 +318,10 @@ def main():
         return
     payload = {"identity": identity(), "tree": tree_digest(root),
                "catalog": catalog_sha256(catalog_records(catalog)), "complete": completed,
-               "skipped": skipped, "sites": indexed, "rows": rows, "batches": verified,
-               "compact": args.compact_records}
+               "skipped": skipped, "sites": indexed, "rows": rows, "batches": [] if persistent else verified,
+               "compact": args.compact_records, "selected": sorted(test["number"] for test in tests)}
+    if persistent:
+        payload.update(workers_mode="persistent", global_rows=global_rows, shadow_batches=verified)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(gzip.compress(json.dumps(payload, separators=(",", ":")).encode(), mtime=0))
     print(f"Comparison map: {len(completed)}/{len(tests)} complete, "

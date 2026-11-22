@@ -85,7 +85,8 @@ class FirstFailureTablesOutcomesImpact(FirstFailureTablesImpact):
                     except (IndexError, KeyError, TypeError, ValueError):
                         rows[number] = "unknown"
                 eligible = False
-                if not plan.subsets and not plan.fixture_edits and site not in skipped:
+                if (data.get("workers_mode", "isolated") == "isolated"
+                        and not plan.subsets and not plan.fixture_edits and site not in skipped):
                     try:
                         observed = data["rows"].get(site, {})
                         if all(number in complete and

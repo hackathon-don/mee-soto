@@ -83,7 +83,10 @@ def classify(data, site, old_op, new_op, number, complete, skipped):
     if entry is None or entry[0] != old_op or number not in complete or site in skipped:
         return "unknown"
     pairs = data["rows"].get(site, {}).get(str(number))
-    return classify_pairs(pairs, old_op, new_op)
+    state = classify_pairs(pairs, old_op, new_op)
+    if state == "agree" and site in data.get("global_rows", {}):
+        return classify_pairs(data["global_rows"][site], old_op, new_op)
+    return state
 
 
 def classify_pairs(pairs, old_op, new_op):
