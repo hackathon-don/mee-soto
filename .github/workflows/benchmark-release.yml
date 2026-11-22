@@ -38,8 +38,7 @@ jobs:
           names="$(python3 tools/benchmark_release.py --expected-sha "$GITHUB_SHA" list)"
           echo "names=$names" >> "$GITHUB_OUTPUT"
 
-  # Build once so every experiment runs the same image and file map; the map
-  # collector is time-limited, so separate builds can produce different maps.
+  # Build once so every experiment runs the same image.
   image:
     if: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
     runs-on: sengi-basic-4-ubuntu-2404
@@ -54,8 +53,6 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      # Cache the map stage; rebuild only when requirements.lock, the SQLGlot pin,
-      # build_file_map.py, map_format.py, sample/tests.json, or the base image changes.
       - name: Build image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -64,7 +61,7 @@ jobs:
           tags: blast-radius-entry
           load: true
           push: false
-          # Keep Sengi-built maps out of the GitHub-hosted sample scoring cache.
+          # Keep the Sengi and GitHub-hosted build caches separate.
           cache-from: type=gha,scope=blast-radius-benchmark-sengi
           cache-to: type=gha,mode=max,scope=blast-radius-benchmark-sengi
       - name: Save image
@@ -112,16 +109,11 @@ jobs:
           NO_BUILD: "1"
         run: |
           set -euo pipefail
+          image_id="$(docker image inspect --format '{{.Id}}' blast-radius-entry)"
           python3 tools/benchmark_release.py --expected-sha "$GITHUB_SHA" measure \
             --experiment "$EXPERIMENT" --attempt "$GITHUB_RUN_ATTEMPT" \
+            --image-id "$image_id" \
             --output "$RUNNER_TEMP/rwx-trials/$EXPERIMENT.json"
-          # The report refuses to rank experiments measured with different file maps.
-          digest="$(docker run --rm --platform linux/amd64 --entrypoint sha256sum blast-radius-entry \
-            /app/strategies/selectors/file_map.json.gz | cut -d' ' -f1)"
-          trials="$RUNNER_TEMP/rwx-trials/$EXPERIMENT.json"
-          echo "file map sha256: $digest"
-          jq --arg digest "$digest" '.map_digest = $digest' "$trials" > "$trials.tmp"
-          mv "$trials.tmp" "$trials"
       - name: Save trials
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -204,7 +196,7 @@ jobs:
           test -f reports/report.md && test ! -L reports/report.md
           test -f reports/results.json && test ! -L reports/results.json
           jq -e --arg sha "$GITHUB_SHA" '
-            .schema == 1 and .commit == $sha and .complete == true and
+            .schema == 2 and .commit == $sha and .complete == true and
             (.winner | type == "string") and .winner == .ranking[0] and
             .winner != .baseline and .experiments[.winner].eligible == true and
             (.experiments[.winner].runs | length == 3 and

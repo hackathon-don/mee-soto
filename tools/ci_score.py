@@ -182,7 +182,7 @@ def main() -> None:
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     try:
         if not experiments:
-            score("map", log_score=False)
+            score("baseline", log_score=False)
             print_scoring_check(commit, passed=True)
             return
         if args.selection_errors or args.cpu_report:

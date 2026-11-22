@@ -13,8 +13,6 @@ from strategies.selectors.impact import ImpactSelector
 from strategies.selectors.impact_first_failure import FirstFailureImpact
 from strategies.selectors.impact_optimizer_transcript import OptimizerTranscriptImpact
 from strategies.selectors.impact_tables import TableKeySelector
-from strategies.selectors.map_narrow import NarrowMapSelector
-from strategies.selectors.map_only import MapSelector
 
 MAX_WORKERS = 8
 
@@ -33,8 +31,6 @@ class Config:
 
 EXPERIMENTS: dict[str, Config] = {
     "baseline": Config(),
-    "map": Config(selector_cls=MapSelector),
-    "map-narrow": Config(selector_cls=NarrowMapSelector),
     "impact": Config(selector_cls=ImpactSelector),
     "impact-full-optimizer-proof": Config(selector_cls=OptimizerTranscriptImpact),
     "impact-variable-workers-matched": Config(

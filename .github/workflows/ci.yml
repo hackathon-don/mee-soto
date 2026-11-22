@@ -75,8 +75,6 @@ jobs:
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         if: ${{ !cancelled() && steps.python.outcome == 'success' }}
 
-      # Cache the map stage; rebuild only when requirements.lock, the SQLGlot pin,
-      # build_file_map.py, map_format.py, sample/tests.json, or the base image changes.
       - name: Build image
         id: build
         if: ${{ !cancelled() && steps.python.outcome == 'success' }}
