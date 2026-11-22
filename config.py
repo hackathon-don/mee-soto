@@ -13,6 +13,7 @@ from strategies.selectors.impact_first_failure import FirstFailureImpact
 from strategies.selectors.impact_fresh_copy import FreshTableCopyImpact
 from strategies.selectors.impact_individual_proof import IndividualProofImpact
 from strategies.selectors.impact_optimizer_transcript import OptimizerTranscriptImpact
+from strategies.selectors.impact_packed_first_failure import PackedFirstFailureImpact
 from strategies.selectors.map_narrow import NarrowMapSelector
 from strategies.selectors.map_only import MapSelector
 
@@ -44,6 +45,9 @@ EXPERIMENTS: dict[str, Config] = {
     ),
     "impact-first-failure": Config(
         selector_cls=FirstFailureImpact, scheduler_cls=VariableWorkerScheduler
+    ),
+    "impact-packed-first-failure": Config(
+        selector_cls=PackedFirstFailureImpact, scheduler_cls=VariableWorkerScheduler
     ),
 }
 
