@@ -631,6 +631,9 @@ class ImpactSelector:
         self.ms = {t["number"]: round(t["seconds"] * 1000) for t in tests}
         self.ids = {t["number"]: t["id"] for t in tests}
 
+    def _analyze_commit(self, ctx, patch):
+        return analyze_commit(ctx, patch.commit, patch.diff)
+
     def select(self, commits: Sequence[Patch]) -> dict[str, list[int]]:
         ctx, ms, ids = self.ctx, self.ms, self.ids
         limits = ctx.limits if ctx else {n: 30.0 for n in ms}
@@ -641,7 +644,7 @@ class ImpactSelector:
             try:
                 if ctx is None:
                     raise RuntimeError("no index")
-                a = analyze_commit(ctx, cid, patch.diff)
+                a = self._analyze_commit(ctx, patch)
                 plan = a.plan
                 choose(plan, a.cand, a.must, a.never, ms, a.cpu, ids, a.deferrable)
                 tp = ctx.ix.pseudo.get("tpcds")

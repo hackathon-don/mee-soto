@@ -259,6 +259,18 @@ narrowing dropped 14,166 of 22,020 candidates, the base candidates produced
 under pytest on each of those patched trees. These results do not guarantee
 zero misses on hidden patches.
 
+## Regenerate the operator-outcome map
+
+From the repo root on native Linux/amd64, use the pinned image and catalog, without mounting patches or labels. The map is ignored if its source, catalog, runtime, or tracer version no longer matches.
+
+```sh
+recording="$HOME/outcome-recording"; mkdir -p "$recording" && docker build --platform linux/amd64 -t outcome-recorder . &&
+docker run --rm --network none --cpus 8 --memory 8g --memory-swap 8g --read-only --tmpfs /tmp:rw,exec,size=1g,mode=1777 --env HOME=/tmp --user "$(id -u):$(id -g)" \
+  -v "$PWD/sample/tests.json:/data/tests.json:ro" -v "$recording:/out" outcome-recorder python -m strategies.build_operator_outcomes \
+  --catalog /data/tests.json --output /out/operator-outcomes.json.gz --checkpoint-dir /out/partial --committed-map --all-sites --jobs 8 --encounter-budget 1000000 --compact-records --cache-rewrites &&
+cp "$recording/operator-outcomes.json.gz" strategies/selectors/impact/maps/
+```
+
 ## Fixture entry map
 
 `impact-fixture-entries` narrows fixture-driven tests (`test_optimizer.py`, `test_transpile.py`, `test_serde.py`) to the entries a run-time edit of an existing `sqlglot/*.py` function can reach. `tools/record_fixture_entries.py` records, at the pinned SQLGlot commit, the code objects each entry enters in its own forked process; import, class setup and code outside the entry loop are charged to the whole test, and classes that load fixtures in setup are left out. The map header fingerprints the source, Python version, catalog and test/fixture files; any mismatch, unrecorded test or changed entry count runs the whole test. Regenerate on native Linux/amd64 after `make build`:
