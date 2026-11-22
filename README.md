@@ -1,7 +1,7 @@
 # Blast Radius selector
 
 A working submission for the Blast Radius track. The submitted image runs the
-`impact-full-optimizer-proof` experiment (set in the `Dockerfile` `CMD`); the
+`impact-variable-workers-matched` experiment (set in the `Dockerfile` `CMD`); the
 default config elsewhere runs every test on every commit. Two selectors are opt-in. `MapSelector` uses a build-generated
 file map only, does not execute tests at runtime, and falls back to all tests
 for unknown changes. `ImpactSelector` narrows candidates with committed
