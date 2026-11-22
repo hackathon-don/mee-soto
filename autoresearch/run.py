@@ -6,9 +6,10 @@
 
 The loop runs on the `autoresearch` branch. Each iteration evaluates the
 experiment named at HEAD on the search split and compares it with the last
-kept run in `autoresearch/results.tsv`. HEAD is kept only when its simulated
-total is lower and it misses no commit the kept run caught; otherwise the
-branch is reset to the kept commit. The first loop run seeds the kept run. Rules for what a candidate commit may change are in program.md.
+kept run in `autoresearch/results.tsv`. HEAD is kept only when simulated time
+plus selector CPU falls with zero misses and no increase in selector CPU;
+otherwise the branch is reset to the kept commit. The first qualifying run
+seeds the ledger. Rules for what a candidate commit may change are in program.md.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -157,20 +159,35 @@ def run_experiment(experiment: str, data: Path) -> dict:
     return evaluation
 
 
+def measured_cpu(value: str | None) -> Decimal | None:
+    try:
+        cpu = Decimal(value)
+    except (InvalidOperation, TypeError):
+        return None
+    return cpu if cpu.is_finite() and cpu >= 0 else None
+
+
 def decide(evaluation: dict, kept_row: dict | None) -> tuple[str, str]:
     if not evaluation["ok"]:
         return "crash", f"run rejected: {evaluation['code']}"
+    if evaluation["missed_commits"]:
+        return "discard", f"misses: {', '.join(evaluation['missed_commits'])}"
+    cpu = measured_cpu(evaluation.get("cpu"))
+    if cpu is None:
+        return "crash", "candidate selector CPU not measured"
     if kept_row is None:
         return "seed", "first run on this branch"
-    kept_ms = round(float(kept_row["simulated_s"]) * 1000)
-    kept_missed = set(filter(None, kept_row["missed"].split(",")))
-    added = sorted(set(evaluation["missed_commits"]) - kept_missed)
-    delta = (evaluation["simulated_milliseconds"] - kept_ms) / 1000
-    if added:
-        return "discard", f"new misses: {', '.join(added)} ({delta:+.3f} s)"
+    kept_cpu = measured_cpu(kept_row.get("selector_cpu_s"))
+    if kept_cpu is None:
+        return "discard", "kept selector CPU not measured"
+    if cpu > kept_cpu:
+        return "discard", f"selector CPU increased ({cpu - kept_cpu:+.6f} s)"
+    kept_total = Decimal(kept_row["simulated_s"]) + kept_cpu
+    total = Decimal(evaluation["simulated_milliseconds"]) / 1000 + cpu
+    delta = total - kept_total
     if delta >= 0:
-        return "discard", f"no improvement ({delta:+.3f} s vs {kept_ms / 1000:.3f} s)"
-    return "keep", f"improved {delta:+.3f} s vs {kept_ms / 1000:.3f} s"
+        return "discard", f"no total improvement ({delta:+.6f} s vs {kept_total:.6f} s)"
+    return "keep", f"total improved {delta:+.6f} s vs {kept_total:.6f} s"
 
 
 def main() -> int:
@@ -226,9 +243,14 @@ def main() -> int:
 
     print(f"\nexperiment:      {args.experiment} @ {head[:7]} on {split} split")
     if evaluation["ok"]:
-        print(f"simulated total: {simulated / 1000:.3f} s (compare on this)")
+        print(f"simulated total: {simulated / 1000:.3f} s")
         print(f"misses:          {len(missed)}{' (' + ', '.join(missed) + ')' if missed else ''}")
-        print(f"selector CPU:    {evaluation['cpu'] or 'not measured'} s (local, reported separately)")
+        cpu = measured_cpu(evaluation.get("cpu"))
+        if cpu is None:
+            print("selector CPU:    not measured")
+        else:
+            print(f"selector CPU:    {cpu:.6f} s")
+            print(f"scored total:    {Decimal(simulated) / 1000 + cpu:.6f} s")
     if args.mode == "loop":
         if status in {"discard", "crash", "reject"} and kept_row is not None:
             git("reset", "--hard", kept_row["commit"])
