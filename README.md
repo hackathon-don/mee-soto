@@ -2,10 +2,8 @@
 
 A working submission for the Blast Radius track. The submitted image runs the
 `impact-variable-workers-matched` experiment (set in the `Dockerfile` `CMD`); the
-default config elsewhere runs every test on every commit. Two selectors are opt-in. `MapSelector` uses a build-generated
-file map only, does not execute tests at runtime, and falls back to all tests
-for unknown changes. `ImpactSelector` narrows candidates with committed
-line-coverage maps and an AST diff, then runs the cheap ones against the
+default config elsewhere runs every test on every commit. `ImpactSelector`
+narrows candidates with committed line-coverage maps and an AST diff, then runs the cheap ones against the
 patched tree inside the container and keeps the ones that fail. See
 [WORKSPACE.md](WORKSPACE.md) for how to choose one with `EXPERIMENT`.
 
@@ -50,18 +48,6 @@ and wheels may differ from the judge. Container stderr is shown in the terminal
 and saved to `out/e2e.log`, `out/e2e-dev.log`, `out/check.log`, or `out/select.log`
 for the corresponding target. Native answers go to `out/e2e-dev.jsonl`.
 
-The opt-in `MapSelector` uses a file map generated during the Docker build
-from the pinned SQLGlot tests and this catalog. The all-tests selector remains
-the default. Each catalog test runs in its own build-time child process; the
-collector records executed Python files and audited file/directory reads. A
-failed, timed-out, incomplete, or unstarted test is always selected at runtime.
-The generated map is not committed. The final image keeps the pinned
-dependencies and SQLGlot source because `ImpactSelector` runs tests against
-them; `MapSelector` does not use them. The collector applies a 360-second budget to test
-collection; fetching source and installing `requirements.lock` are separate
-Docker build steps outside that budget. Inspect the build's passed,
-baseline-failure, incomplete, and missing counts before relying on its coverage.
-
 `sample/answers.json` lists the tests each sample commit breaks and the kind of change it is. The practice and final commits are hidden, and so is everything your program prints when it runs on them. A rejected submission tells you which rule it broke and nothing more, so reproduce problems here.
 
 ## Submit
@@ -77,7 +63,7 @@ Push to a public GitHub repository with the `Dockerfile` at its top, then enter 
 
 ## How your image runs
 
-- The build environment provides up to 10 minutes overall. The collector's 360-second budget covers test collection only; source download and dependency installation are separate steps and add to a cold build's total time.
+- The build environment provides up to 10 minutes overall.
 - Your repository may hold 20 MB. Git submodules and Git LFS files are not fetched: clone sqlglot in the `Dockerfile` and commit maps as plain files.
 - The run has no network, 2 cores, 4 GB of memory and 3 minutes for the whole batch (4.5 in the final, which has about one and a half times as many commits).
 - The disk is read-only. `/tmp` holds 64 MB and is empty at the start of every run.

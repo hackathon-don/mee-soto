@@ -15,8 +15,6 @@ from strategies.selectors.impact_fresh_copy import FreshTableCopyImpact
 from strategies.selectors.impact_individual_proof import IndividualProofImpact
 from strategies.selectors.impact_optimizer_transcript import OptimizerTranscriptImpact
 from strategies.selectors.impact_tables import TableKeySelector
-from strategies.selectors.map_narrow import NarrowMapSelector
-from strategies.selectors.map_only import MapSelector
 
 MAX_WORKERS = 8
 
@@ -35,8 +33,6 @@ class Config:
 
 EXPERIMENTS: dict[str, Config] = {
     "baseline": Config(),
-    "map": Config(selector_cls=MapSelector),
-    "map-narrow": Config(selector_cls=NarrowMapSelector),
     "impact": Config(selector_cls=ImpactSelector),
     "impact-individual-pass": Config(selector_cls=IndividualProofImpact),
     "impact-fresh-table-copy": Config(selector_cls=FreshTableCopyImpact),

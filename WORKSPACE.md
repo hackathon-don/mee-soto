@@ -22,7 +22,7 @@ failure, and the selector's own CPU time. Lower is better.
 
 | Command | Runs | Output |
 | --- | --- | --- |
-| `make build` | Builds the Docker image, including the selector map | `blast-radius-entry` image (override with `IMAGE`) |
+| `make build` | Builds the Docker image, including the impact name index | `blast-radius-entry` image (override with `IMAGE`) |
 | `make e2e` | Selector and scheduler in the pinned linux/amd64 image, under the scorer's limits, then the sample scorer | `out/e2e.jsonl` |
 | `make e2e-amd64` | Alias of `make e2e`, explicitly naming the judge's linux/amd64 architecture | `out/e2e.jsonl` |
 | `make e2e-dev` | Same limits and scorer, native architecture with a separate `blast-radius-entry-dev` image and unpinned Python base | `out/e2e-dev.jsonl` |
@@ -30,7 +30,7 @@ failure, and the selector's own CPU time. Lower is better.
 | `make select` | Selector only, in the image | `out/picks.jsonl`, one `{"commit", "selected"}` line a patch |
 | `make schedule` | Scheduler only, on the host, over `out/picks.jsonl`, then the sample scorer | `out/schedule-saved.jsonl` |
 | `make schedule SOURCE=ideal` | Scheduler only, over the sample's known failing tests | `out/schedule-ideal.jsonl` |
-| `make test` | Unit tests on the host ([collector test requirements](AGENTS.md#evaluation-and-runtime)) | |
+| `make test` | Unit tests on the host | |
 | `make autoresearch EXPERIMENT=<name>` | One [autoresearch](autoresearch/program.md) iteration: the experiment on all 30 public patches, then keep or reset HEAD | `autoresearch/results.tsv` |
 | `make autoresearch-validate EXPERIMENT=<name>` | The experiment on the held-out validation split (empty until new patches are frozen); for humans, not the loop | `autoresearch/validation.tsv` |
 
@@ -60,10 +60,6 @@ the known failing tests. The same modes run directly as
   `(catalog, config)`. Its `select(commits)` method processes the batch and
   returns a mapping from commit id to unique catalog test numbers.
   `AllTestsSelector` currently selects every test for every commit.
-- `MapSelector` is opt-in via the `map` experiment. It reads a
-  precomputed file-to-test map only; it does not import the patched source,
-  collect tests, launch subprocesses, or probe imports. Unknown, empty,
-  malformed, quoted, binary, or unsupported changes select all tests.
 - `ImpactSelector` is opt-in via the `impact` experiment. It maps an AST diff
   of each patch onto committed line-coverage maps, then runs cheap candidates
   against the patched tree and selects the ones that fail. See
@@ -115,7 +111,6 @@ On the 30 public patches with three workers:
 | Selector | Simulated seconds | Misses |
 | --- | ---: | ---: |
 | All tests (default; `make e2e`) | 1,210.470 | 0 |
-| [MapSelector](#run-the-map-selector) ([reference run](https://github.com/hackathon-don/rwx-blast-radius/pull/10)) | 851.9 | 0 |
 
 `make e2e` and `make e2e-dev` measure the entry process's user and system CPU,
 including reaped descendants, from launch to exit. Build time, host scoring,
@@ -161,15 +156,15 @@ entrypoints do not enable this instrumentation.
 **Benchmark release** runs on every push to main and benchmarks every
 registered experiment three times at the pushed commit, without CPU
 diagnostics so logging overhead stays out of the ranked totals. One job builds
-the image, so every experiment uses the same file map. Each experiment
+the image, so every experiment uses the same image. Each experiment
 runs in its own job on its own machine, and a report job combines their trials;
 an experiment whose job fails counts as failed runs. The workflow saves the human report and structured results as artifacts, even when nothing
 is released. The
 baseline is a reference; eligible candidates finish all three runs without a
 miss and are ranked by exact median simulated-plus-CPU time. An incomplete batch
 or no eligible candidate cannot release. A batch is incomplete when an experiment
-job failed in the latest attempt or the experiments were measured with different
-file maps.
+job failed in the latest attempt or the experiments do not all report the
+same Docker image ID.
 
 When the batch has an eligible winner, a separate job validates the saved
 result and attaches both reports to a release tagged at the measured commit.
@@ -256,51 +251,3 @@ narrowing dropped 14,166 of 22,020 candidates, the base candidates produced
 `test_max_nodes` on three mutants when several copies ran at once; it passes
 under pytest on each of those patched trees. These results do not guarantee
 zero misses on hidden patches.
-
-## Map-only selector
-
-The Docker builder runs `tools/build_file_map.py` against SQLGlot
-`tobymao/sqlglot@eb11aec4be8cb2122afe713a4816662c3f0fb2fa` and
-`sample/tests.json`. It starts one Python 3.13 child per catalog test, enables
-`sys.monitoring.PY_START` before importing pytest, and audits file opens and
-directory enumeration. The map records repository-relative source/fixture
-files and directory dependencies; runtime adds dependents of only the
-immediate parent directory of each changed file.
-
-The deterministic gzip JSON uses schema 2 and embeds the exact
-`(number, id, file)` catalog identity and its digest. It is generated in the
-builder stage and is not committed. The builder copies the pinned
-`requirements.lock`, collector, schema helper, and `sample/tests.json`; it
-does not receive sample patches or answers. The final stage copies the
-generated map and runtime application files, not the collector tooling; it
-keeps the pinned dependencies and SQLGlot source for `ImpactSelector`, which
-`MapSelector` does not read. Runtime validates schema, source pin, catalog identity,
-status partition, paths, and test numbers; malformed or missing maps fall back
-to all tests.
-
-Baseline failures, missing tests, and incomplete traces are always selected.
-Incomplete includes subprocess/fork use (descendants are not traced),
-timeouts, invalid results, and tests whose trace omitted their catalog file.
-Tests not started before the collector budget expires are recorded as missing,
-not silently discarded. At runtime, changed files must have exact file entries;
-an unmapped/new path, empty entry, or unsupported diff falls back to all tests.
-For directory reads, only tests that enumerated the changed file's immediate
-parent directory are added; a file-content edit does not affect ancestor
-directory listings. As with any pinned test-to-file map, changed control flow
-or hidden tests may not be represented by this catalog's measurements.
-
-The collector uses four workers, a 360-second test-collection budget, and a
-90-second per-test timeout by default. The collection budget does not include
-base-image acquisition, SQLGlot source download, dependency installation, or
-final image assembly; those steps add to a clean Docker build's total time.
-Build logs report the full catalog partition (passed, baseline failures,
-incomplete, and missing); missing/incomplete tests are always selected. The
-runtime gets only the patches and test catalog from the host.
-
-### Run the map selector
-
-From the repository root, build and score with the standard mounts and limits:
-
-```sh
-make e2e EXPERIMENT=map
-```

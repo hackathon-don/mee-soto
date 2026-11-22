@@ -7,8 +7,7 @@ the upstream SQLGlot checkout do not apply here.
 
 ## Hard rules
 
-- Build the judge-compatible image on native Linux amd64. An emulated amd64
-  build can exhaust the map collector's budget and silently weaken coverage.
+- Build the judge-compatible image on native Linux amd64.
 - Keep `sample/answers.json` on the host for sample scoring and ideal replay
   only. Never copy it into the image, mount it, or feed it to selection.
 - Do not submit to the leaderboard.
@@ -30,13 +29,8 @@ New idea = new class in its own file + new `EXPERIMENTS` entry; don't edit exist
 ### Selection
 
 - Start in [strategies/selectors/](strategies/selectors/) and [config.py](config.py).
-  For map collection, see [tools/build_file_map.py](tools/build_file_map.py)
-  and [Dockerfile](Dockerfile).
 - Run `make select` to inspect picks and `make e2e` to check misses. Keep the
   scheduler and worker count fixed when evaluating a selector change.
-- The [MapSelector recipe](WORKSPACE.md#run-the-map-selector) runs inside
-  the built image. Check the collector's result counts
-  before trusting a new map.
 
 ### Scheduling
 
@@ -51,8 +45,6 @@ New idea = new class in its own file + new `EXPERIMENTS` entry; don't edit exist
 - Use `make e2e` (or `make e2e-amd64` explicitly) for judge-compatible scores
   and misses. Use `make e2e-dev` for native-architecture iteration, not
   judge-compatible measurements. `make check` verifies output format only.
-- `make test` skips three collector tests unless the host has Python 3.12+
-  and pytest.
 
 ## Evidence for PRs
 
@@ -69,7 +61,7 @@ Whenever you report a score, use this format. PRs do not need to include it,
 and it does not change what `make e2e` prints.
 
 ```
-Experiment: "map"
+Experiment: "<experiment-name>"
 Score: 852.1 s (median)
 
 | Run      | Simulated | CPU    | Missed | Total     |
