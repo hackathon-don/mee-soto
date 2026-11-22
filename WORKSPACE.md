@@ -151,7 +151,9 @@ an experiment whose job fails counts as failed runs. The workflow saves the huma
 is released. The
 baseline is a reference; eligible candidates finish all three runs without a
 miss and are ranked by exact median simulated-plus-CPU time. An incomplete batch
-or no eligible candidate cannot release.
+or no eligible candidate cannot release. A batch is incomplete when an experiment
+job failed in the latest attempt or the experiments were measured with different
+file maps.
 
 When the batch has an eligible winner, a separate job validates the saved
 result and attaches both reports to a release tagged at the measured commit.
