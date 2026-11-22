@@ -124,6 +124,12 @@ no judge-compatible reference run in this repository yet.
 The official starter files are from the
 [track download](https://www.joinbuilders.org/buildathon/tracks/blast-radius/files/blast-radius-sample.tar.gz).
 
+## PR selection errors
+
+The score comment reports selection errors for each experiment's median-total run.
+It uses the emitted worker schedule and public labels on the scoring host only; labels
+do not reach the selector container.
+
 ## Impact selector
 
 `strategies/selectors/impact/` holds `ImpactSelector`. The maps committed

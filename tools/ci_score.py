@@ -4,10 +4,17 @@ import argparse
 import ast
 from dataclasses import dataclass
 from decimal import Decimal
+from pathlib import Path
 import re
 from statistics import median
 import subprocess
 import sys
+from tempfile import TemporaryDirectory
+
+if __package__:
+    from .ci_selection_report import read_schedule, selection_errors
+else:
+    from ci_selection_report import read_schedule, selection_errors
 
 
 def experiment_names(revision: str) -> list[str]:
@@ -67,9 +74,9 @@ def parse_score(output: str) -> Score:
     )
 
 
-def score(experiment: str, *, log_score: bool = True) -> Score:
+def score(experiment: str, *, log_score: bool = True, options=()) -> Score:
     result = subprocess.run(
-        ["make", "e2e", f"EXPERIMENT={experiment}"], stdout=subprocess.PIPE, text=True
+        ["make", "e2e", f"EXPERIMENT={experiment}", *options], stdout=subprocess.PIPE, text=True
     )
     if log_score or result.returncode:
         sys.stderr.write(result.stdout)
@@ -78,6 +85,37 @@ def score(experiment: str, *, log_score: bool = True) -> Score:
         return parse_score(result.stdout)
     except ValueError as error:
         raise ValueError(f"{experiment}: {error}") from error
+
+
+@dataclass(frozen=True)
+class DiagnosticRun:
+    score: Score
+    schedule: dict[str, set[int]] | None
+
+
+def score_with_schedule(experiment: str) -> DiagnosticRun:
+    # Each run gets new paths; a missing diagnostic cannot reuse a previous run.
+    with TemporaryDirectory(prefix="rwx-ci-") as out:
+        score_row = score(experiment, options=(f"OUT={out}",))
+        try:
+            schedule = read_schedule(Path(out) / "e2e.jsonl")
+        except (OSError, ValueError, KeyError, TypeError):
+            schedule = None
+        return DiagnosticRun(score_row, schedule)
+
+
+def median_run(runs: list[DiagnosticRun]) -> DiagnosticRun:
+    return sorted(runs, key=lambda run: run.score.total)[len(runs) // 2]
+
+
+def print_selection_errors(run: DiagnosticRun) -> None:
+    if run.schedule is not None:
+        try:
+            print(selection_errors(run.schedule, Path("sample/answers.json")))
+            return
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+    print("#### Selection errors (median run)\n\nPublic-sample selection errors unavailable for the median-total run.")
 
 
 def print_experiment(experiment: str, runs: list[Score], baseline: Score) -> None:
@@ -99,8 +137,10 @@ def print_scoring_check(commit: str, passed: bool) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("base", help="Previous branch tip or PR base commit SHA")
+    parser.add_argument("--selection-errors", action="store_true", help="Report median-run selection errors for PR CI")
+    args = parser.parse_args()
     try:
-        experiments = added_experiments(parser.parse_args().base)
+        experiments = added_experiments(args.base)
     except (ValueError, subprocess.CalledProcessError) as error:
         parser.error(str(error))
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
@@ -109,7 +149,15 @@ def main() -> None:
             score("map", log_score=False)
             print_scoring_check(commit, passed=True)
             return
-        results = {experiment: [score(experiment) for _ in range(3)] for experiment in experiments}
+        if args.selection_errors:
+            diagnostics = {
+                experiment: [score_with_schedule(experiment) for _ in range(3)]
+                for experiment in experiments
+            }
+            results = {name: [run.score for run in runs] for name, runs in diagnostics.items()}
+        else:
+            diagnostics = {}
+            results = {experiment: [score(experiment) for _ in range(3)] for experiment in experiments}
         baseline = score("baseline")
     except (ValueError, subprocess.CalledProcessError) as error:
         if not experiments:
@@ -118,6 +166,10 @@ def main() -> None:
 
     for experiment, runs in results.items():
         print_experiment(experiment, runs, baseline)
+        if experiment in diagnostics:
+            run = median_run(diagnostics[experiment])
+            print()
+            print_selection_errors(run)
         print()
     print(f"Machine: linux/amd64  \nCommit hash: {commit}")
 
