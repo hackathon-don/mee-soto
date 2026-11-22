@@ -55,7 +55,8 @@ def false_checks(cpu, answers_path: Path) -> FalseChecks:
         raise ValueError("CPU diagnostics cover unknown patches")
     false = [(number, seconds) for patch, data in cpu.items()
              for number, seconds in data.timed if number not in failures[patch]]
-    total = sum(max(len(data.timed), data.checks or 0) for data in cpu.values())
+    # Only completed checks count; tests left unrun after an early stop are not checks.
+    total = sum(len(data.timed) for data in cpu.values())
     return FalseChecks(len(false), total, sum((seconds for _, seconds in false), Decimal(0)))
 
 

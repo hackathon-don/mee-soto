@@ -18,8 +18,6 @@ class PatchCpu:
     child: Decimal
     timed: tuple[tuple[int, Decimal], ...]
     incomplete_children: int
-    # Checks the selector started, including ones whose child died first.
-    checks: int | None = None
 
 
 def _seconds(value):
@@ -48,10 +46,7 @@ def parse_cpu(log: str) -> dict[str, PatchCpu]:
         incomplete = obj["incomplete_children"]
         if type(incomplete) is not int or incomplete < 0:
             raise ValueError("invalid incomplete child count")
-        checks = obj.get("checks")
-        if checks is not None and (type(checks) is not int or checks < 0):
-            raise ValueError("invalid check count")
-        result[patch] = PatchCpu(_seconds(obj["child_cpu"]), tuple(timed), incomplete, checks)
+        result[patch] = PatchCpu(_seconds(obj["child_cpu"]), tuple(timed), incomplete)
     return result
 
 
