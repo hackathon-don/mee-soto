@@ -28,7 +28,8 @@ class FirstFailureTablesOutcomesImpact(FirstFailureTablesImpact):
                 data = json.load(stream)
             if (data["header"] == trace_header(selector.SG, self.catalog)
                     and (not data.get("committed") or
-                         data["header"]["sqlglot_revision"] and data.get("workers_mode") == "persistent")
+                         data["header"]["sqlglot_revision"]
+                         and data.get("workers_mode") in ("isolated", "persistent"))
                     and isinstance(data["complete"], list) and isinstance(data["skipped"], list)
                     and isinstance(data["batches"], list)):
                 return data

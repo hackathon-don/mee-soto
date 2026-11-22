@@ -170,7 +170,7 @@ class Rewrite(ast.NodeTransformer):
 
 
 def relevant(frame):
-    module = frame.f_globals.get("__name__", "")
+    module = frame.f_globals.get("__name__") or ""
     return module in ("sqlglot", "tests") or module.startswith(("sqlglot.", "tests."))
 
 
@@ -199,6 +199,8 @@ class Recorder(importlib.abc.MetaPathFinder):
         self.rewrite_only = os.environ.get("BR_OUTCOME_PROFILE") == "rewrite"
         self.fast_profile = os.environ.get("BR_OUTCOME_FAST_PROFILE") == "1"
         self.encounters = None
+        self.import_sites = None
+        self.module_depth = 0
         if self.compact and os.environ.get("BR_OUTCOME_FAST_BUILTINS") == "1":
             self.builtins = builtin_rows()
             self.observe = self.observe_builtins
@@ -207,6 +209,29 @@ class Recorder(importlib.abc.MetaPathFinder):
         if not self.unknown and self.diagnose:
             batch_rejection(reason)
         self.unknown = True
+
+    def isolate(self, result, collecting=False):
+        self.import_sites = set()
+        self.collecting = collecting
+        budget = int(os.environ.get("BR_OUTCOME_ENCOUNTER_BUDGET", "0"))
+        self.remaining = budget
+        observe = self.observe
+
+        def observe_isolated(key, op, left, right, chain):
+            if key is not None:
+                if self.collecting or self.module_depth:
+                    self.import_sites.add(key)
+                if budget:
+                    if self.remaining == 0:
+                        self.reject("isolated comparison encounter budget exceeded")
+                        self.remaining = -1
+                        result.with_suffix(".capped").touch()
+                    if self.remaining < 0:
+                        return OPERATORS[op](left, right)
+                    self.remaining -= 1
+            return observe(key, op, left, right, chain)
+
+        self.observe = observe_isolated
 
     def install(self):
         if any(name == "sqlglot" or name.startswith("sqlglot.") for name in sys.modules):
@@ -232,6 +257,11 @@ class Recorder(importlib.abc.MetaPathFinder):
         sys.setprofile(self.profile)
 
     def profile(self, frame, event, arg):
+        if self.import_sites is not None and frame.f_code.co_name == "<module>":
+            if event == "call":
+                self.module_depth += 1
+            elif event == "return" and self.module_depth:
+                self.module_depth -= 1
         if event == "c_call":
             if (self.fast_profile and id(arg) in PROFILE_SAFE_IDS) or not relevant(frame):
                 return
@@ -370,8 +400,11 @@ class Recorder(importlib.abc.MetaPathFinder):
                 return sorted(json.dumps(v, separators=(",", ":")) for v in values)
             return sorted(values)
 
-        return {"pid": os.getpid(), "sites": {k: encode(v) for k, v in self.rows.items()},
+        data = {"pid": os.getpid(), "sites": {k: encode(v) for k, v in self.rows.items()},
                 "skipped": sorted(self.skipped)}
+        if self.import_sites is not None:
+            data["import_sites"] = sorted(self.import_sites)
+        return data
 
     def merge(self, report):
         self.skipped.update(report["skipped"])
@@ -449,7 +482,7 @@ def rewrite_code(source, path, rel, targets):
 
 
 class Workers:
-    def __init__(self, root, result, sites):
+    def __init__(self, root, result, sites, isolated=False):
         expected, serial, current = [], count(), threading.local()
         self.expected = expected
         original_start, original_command = BaseProcess.start, spawn.get_command_line
@@ -474,28 +507,35 @@ class Workers:
             path = result.with_suffix(f".worker-{next(serial)}.json")
             record[0] = path
             argv[-2] = ("from strategies.trace_operator_outcomes import worker; "
-                        f"worker({str(root)!r}, {str(path)!r}, {sites!r}, {kwargs!r})")
+                        f"worker({str(root)!r}, {str(path)!r}, {sites!r}, {kwargs!r}, {isolated!r})")
             return argv
 
         BaseProcess.start = start
         spawn.get_command_line = command
 
     def merge(self, recorder):
+        complete = True
         for path, process in self.expected:
             if path is None or process is None or process.poll() != 0:
-                return False
+                complete = False
+                continue
             try:
                 report = json.loads(path.read_text())
                 if report["pid"] != process.pid:
                     return False
                 recorder.merge(report)
+                if recorder.import_sites is not None:
+                    recorder.import_sites.update(report["import_sites"])
+                    complete &= report["complete"]
             except (OSError, ValueError, KeyError, TypeError):
-                return False
-        return True
+                complete = False
+        return complete
 
 
-def worker(root, result, sites, kwargs):
+def worker(root, result, sites, kwargs, isolated=False):
     recorder = Recorder(Path(root), None if sites is None else set(json.loads(Path(sites).read_text())))
+    if isolated:
+        recorder.isolate(Path(result))
     recorder.install()
     BaseProcess.start = abort
     original = spawn._main
@@ -508,9 +548,13 @@ def worker(root, result, sites, kwargs):
 
     @atexit.register
     def report():
-        if (code == 0 and (recorder.rewrite_only or not recorder.unknown)
-                and sys.getprofile() == recorder.profile):
-            Path(result).write_text(json.dumps(recorder.report()))
+        complete = (code == 0 and (recorder.rewrite_only or not recorder.unknown)
+                    and sys.getprofile() == recorder.profile)
+        if isolated or complete:
+            data = recorder.report()
+            if isolated:
+                data["complete"] = complete
+            Path(result).write_text(json.dumps(data))
 
     spawn._main = main
     spawn.spawn_main(**kwargs)
@@ -520,14 +564,25 @@ def trace(root, node, result, sites):
     os.chdir(root)
     plain = os.environ.get("BR_OUTCOME_PROFILE") == "plain"
     recorder = Recorder(root, None if sites is None else set(json.loads(Path(sites).read_text())))
+    isolated = not plain and not recorder.rewrite_only
     if not plain:
+        if isolated:
+            recorder.isolate(result, collecting=True)
         recorder.install()
-    workers = None if plain else Workers(root, result, sites)
+    workers = None if plain else Workers(root, result, sites, isolated)
     import pytest
 
     class Outcome:
         phases = set()
         bad = False
+
+        @pytest.hookimpl(hookwrapper=True, tryfirst=True)
+        def pytest_runtest_protocol(self, item):
+            recorder.collecting = False
+            try:
+                yield
+            finally:
+                recorder.collecting = True
 
         def pytest_runtest_logreport(self, report):
             if report.nodeid == node and report.passed and not getattr(report, "wasxfail", None):
@@ -537,6 +592,14 @@ def trace(root, node, result, sites):
 
     outcome = Outcome()
     code = pytest.main([node, "-q", "-p", "no:cacheprovider"], plugins=[outcome])
+    if isolated:
+        worker_complete = workers.merge(recorder)
+        complete = (not code and not outcome.bad and outcome.phases == {"setup", "call", "teardown"}
+                    and worker_complete and not recorder.unknown and sys.getprofile() == recorder.profile)
+        data = recorder.report() if complete else {"import_sites": sorted(recorder.import_sites)}
+        data["complete"] = complete
+        result.write_text(json.dumps(data))
+        return
     if not code and not outcome.bad and outcome.phases == {"setup", "call", "teardown"}:
         if plain:
             result.write_text("{}")

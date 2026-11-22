@@ -43,19 +43,25 @@ def sites(root, requested):
     return selected
 
 
-def build_code_cache(root, cache, targets):
+def build_code_cache(root, cache, targets, indexed):
     paths = (sorted((root / "sqlglot").rglob("*.py")) if targets is None else
              [root / rel for rel in sorted({site.split(":", 1)[0] for site in targets})])
+    skipped_sites = set()
     for path in paths:
         rel = path.relative_to(root).as_posix()
         try:
             source = path.read_bytes()
             code, skipped, collision = rewrite_code(source, str(path), rel, targets)
-            dest = cache / rel
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_bytes(marshal.dumps((sha256(source).digest(), sys.flags.optimize, code, skipped, collision)))
+            skipped_sites.update(skipped)
+            if collision:
+                skipped_sites.update(site for site in indexed if site.split(":", 1)[0] == rel)
+            if cache is not None:
+                dest = cache / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_bytes(marshal.dumps((sha256(source).digest(), sys.flags.optimize, code, skipped, collision)))
         except (OSError, SyntaxError, ValueError):
-            continue
+            skipped_sites.update(site for site in indexed if site.split(":", 1)[0] == rel)
+    return skipped_sites
 
 
 def cgroup_cpu_seconds():
@@ -88,9 +94,10 @@ def collect(root, tests, requested, indexed, jobs, budget, timeout, batches, com
             sites_path = directory / "sites.json"
             sites_path.write_text(json.dumps(sorted(targets)))
             flags = [str(sites_path)]
-        if cache_code:
-            cache = directory / "bytecode"
-            build_code_cache(root, cache, targets)
+        cache = directory / "bytecode" if cache_code else None
+        statically_skipped = (build_code_cache(root, cache, targets, indexed)
+                              if cache_code or not (persistent or profile) else set())
+        if cache is not None:
             env["BR_OUTCOME_CODE_CACHE"] = str(cache)
 
         work = []
@@ -154,7 +161,7 @@ def collect(root, tests, requested, indexed, jobs, budget, timeout, batches, com
         def run(item):
             mode, key, target = item
             if mode == "shard":
-                return run_shard(key, target)
+                return (*run_shard(key, target), False)
             started = time.monotonic()
             report = None
             batch = batches[key] if mode == "batch" else None
@@ -167,7 +174,7 @@ def collect(root, tests, requested, indexed, jobs, budget, timeout, batches, com
             if time.monotonic() >= deadline:
                 if batch is not None:
                     rejected("build budget expired before batch started")
-                return mode, key, report, None
+                return mode, key, report, None, False
             result = directory / f"{mode}-{key}.json"
             argv = [sys.executable, "-m", "strategies.trace_operator_outcomes",
                     mode, str(root), target, str(result), *flags]
@@ -207,12 +214,15 @@ def collect(root, tests, requested, indexed, jobs, budget, timeout, batches, com
                             rejected(line.removeprefix(BATCH_REJECTION).rstrip())
                         else:
                             print(line, file=sys.stderr, end="", flush=True)
-            return mode, key, report, time.monotonic() - started
+            capped = mode == "test" and (result.with_suffix(".capped").exists()
+                                         or any(directory.glob(f"{result.stem}.worker-*.capped")))
+            return mode, key, report, time.monotonic() - started, capped
 
         completed, skipped, rows, verified, global_rows = [], set(), {}, [], {}
+        import_sites, capped_tests = set(), []
         attempted, child_seconds = 0, 0.0
         with ThreadPoolExecutor(jobs) as pool:
-            for mode, number, report, seconds in pool.map(run, work):
+            for mode, number, report, seconds, capped in pool.map(run, work):
                 if mode == "shard":
                     attempted += number
                     child_seconds += seconds
@@ -241,11 +251,17 @@ def collect(root, tests, requested, indexed, jobs, budget, timeout, batches, com
                 if mode == "test" and seconds is not None:
                     attempted += 1
                     child_seconds += seconds
+                if capped:
+                    capped_tests.append(number)
                 if report is None:
                     continue
                 if profile:
                     completed.append(number)
                     continue
+                if mode == "test":
+                    import_sites.update(set(report["import_sites"]) & indexed.keys())
+                    if capped or not report["complete"]:
+                        continue
                 skipped.update(report["skipped"])
                 observed = {key: None if values is None else [json.loads(value) for value in values]
                             for key, values in report["sites"].items() if key in indexed}
@@ -257,7 +273,8 @@ def collect(root, tests, requested, indexed, jobs, budget, timeout, batches, com
                         rows.setdefault(key, {})[number] = values
     global_rows = {site: None if values is None else [json.loads(value) for value in sorted(values)]
                    for site, values in global_rows.items()}
-    return completed, sorted(skipped), rows, verified, attempted, child_seconds, global_rows
+    return (completed, sorted(skipped | statically_skipped), rows, verified, attempted, child_seconds, global_rows,
+            sorted(import_sites), sorted(capped_tests))
 
 
 def main():
@@ -278,7 +295,7 @@ def main():
     parser.add_argument("--fast-profile", action="store_true",
                         help="prefilter known harmless builtin calls in the safety profiler")
     parser.add_argument("--encounter-budget", type=int, default=0,
-                        help="mark a persistent test unknown above this many parent-process comparisons (0: unlimited)")
+                        help="mark a test unknown above this many comparisons in a recorder process (0: unlimited)")
     parser.add_argument("--cache-rewrites", action="store_true", help="compile each rewritten module once per build")
     parser.add_argument("--profile-mode", choices=("plain", "rewrite"),
                         help="time plain tests or rewritten tests without recording; never write a map")
@@ -291,17 +308,15 @@ def main():
         parser.error("--jobs must be positive")
     if args.fast_builtins and not args.compact_records:
         parser.error("--fast-builtins requires --compact-records")
-    if args.encounter_budget < 0 or (args.encounter_budget and
-                                    (args.workers_mode != "persistent" or args.profile_mode)):
-        parser.error("--encounter-budget must be nonnegative and requires persistent recording")
+    if args.encounter_budget < 0 or (args.encounter_budget and args.profile_mode):
+        parser.error("--encounter-budget must be nonnegative and requires recording")
     if args.profile_mode:
         if args.output or args.batch_file or args.compact_records or (args.profile_mode == "plain" and args.cache_rewrites):
             parser.error("profile modes do not accept map output, batches or records; only rewrite mode can cache")
     elif args.output is None:
         parser.error("--output is required to build a map")
-    if args.committed_map and (not args.all_sites or args.test_number or args.batch_file or args.profile_mode
-                               or args.workers_mode != "persistent"):
-        parser.error("--committed-map requires all sites and tests, persistent recording, and no patch batches")
+    if args.committed_map and (not args.all_sites or args.test_number or args.batch_file or args.profile_mode):
+        parser.error("--committed-map requires all sites and tests, recording, and no patch batches")
     start = time.monotonic()
     cpu_start = cgroup_cpu_seconds()
     root = args.source_root.resolve()
@@ -324,7 +339,7 @@ def main():
                 or any(type(module) is not str for module in batch["imports"])):
             parser.error("invalid verification batch")
     persistent = args.workers_mode == "persistent"
-    completed, skipped, rows, verified, attempted, child_seconds, global_rows = collect(
+    completed, skipped, rows, verified, attempted, child_seconds, global_rows, import_sites, capped_tests = collect(
         root, tests, args.site, indexed, args.jobs, args.budget_seconds, args.timeout_seconds,
         batches, args.compact_records, args.cache_rewrites, args.profile_mode, persistent, args.fast_builtins,
         args.encounter_budget, args.fast_profile)
@@ -348,6 +363,10 @@ def main():
         payload["committed"] = True
     if persistent:
         payload.update(workers_mode="persistent", global_rows=global_rows, shadow_batches=verified)
+    else:
+        payload.update(workers_mode="isolated", import_sites=import_sites, capped=capped_tests)
+        print(f"Encounter cap: {len(capped_tests)} tests unknown at all {len(indexed)} indexed sites"
+              f" ({len(capped_tests) * len(indexed)} test/site pairs): {capped_tests}")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(gzip.compress(json.dumps(payload, separators=(",", ":")).encode(), mtime=0))
     print(f"Comparison map: {len(completed)}/{len(tests)} complete, "

@@ -3,7 +3,7 @@
 ### Regenerate the patch-independent committed map
 
 Run from the repository root on native Linux/amd64. This one-off record
-uses the pinned image, catalog and four cores. No patch, label, or ordered
+uses the pinned image, catalog and eight cores. No patch, label, or ordered
 patch-batch input is mounted. Check the reported completion and file size
 against the track's repository cap before staging the ordinary gzip file.
 
@@ -13,14 +13,15 @@ test "$(uname -s)/$(uname -m)" = Linux/x86_64
 img=blast-radius-outcomes
 maps="$PWD/strategies/selectors/impact/maps"
 docker build --platform linux/amd64 -t "$img" .
-docker run --rm --network none --cpus 4 --memory 8g --memory-swap 8g \
+docker run --rm --network none --cpus 8 --memory 8g --memory-swap 8g \
   --read-only --tmpfs /tmp:rw,exec,size=1g,mode=1777 --env HOME=/tmp \
   --user "$(id -u):$(id -g)" \
   -v "$PWD/sample/tests.json:/data/tests.json:ro" -v "$maps:/out" \
   "$img" python -m strategies.build_operator_outcomes \
     --catalog /data/tests.json --output /out/operator-outcomes.json.gz \
-    --committed-map --all-sites --workers-mode persistent --jobs 4 \
-    --budget-seconds 3600 --encounter-budget 1000000 --compact-records --cache-rewrites
+    --committed-map --all-sites --workers-mode isolated --jobs 8 \
+    --budget-seconds 2400 --encounter-budget 1000000 --compact-records --cache-rewrites
+wc -c "$maps/operator-outcomes.json.gz"
 ```
 
 The Dockerfile records the exact archive revision in the image. The map
@@ -32,6 +33,10 @@ identity or tracer-version changes; pre-header maps must also be regenerated.
 The output has no patch answers or replay proofs. It is **shadow-only**:
 even a complete agreement cannot skip a check without the separate
 isolated-and-ordered replay proof required by active mode.
+Each test's isolated recording includes its pytest fixture setup and teardown.
+Sites observed during module import or collection are listed separately. A test
+that hits the encounter cap in its parent or a spawned recorder is unknown at
+all sites, and its test number is listed under `capped`.
 
 ### Public two-site pilot
 

@@ -10,7 +10,7 @@ from pathlib import Path
 
 OPS = ("Is", "IsNot", "Eq", "NotEq", "In")
 VERSION = 3
-TRACER_VERSION = 1
+TRACER_VERSION = 2
 COMMITTED_MAP = Path(__file__).parent / "impact/maps/operator-outcomes.json.gz"
 SOURCE_REVISION_FILE = ".blast-radius-sqlglot-rev"
 EXECUTOR_CLOCK_PATH = "sqlglot/executor/__init__.py"
