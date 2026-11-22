@@ -11,8 +11,10 @@ RUN if [ "${FREE_CPU_BYTECODE}" = "1" ]; then \
     else \
         python -m compileall -q -j 0 /usr/local/lib/python3.13 >/dev/null || true; \
     fi
-ADD https://github.com/tobymao/sqlglot/archive/eb11aec4be8cb2122afe713a4816662c3f0fb2fa.tar.gz /tmp/sqlglot.tar.gz
+ARG SQLGLOT_REV=eb11aec4be8cb2122afe713a4816662c3f0fb2fa
+ADD https://github.com/tobymao/sqlglot/archive/${SQLGLOT_REV}.tar.gz /tmp/sqlglot.tar.gz
 RUN mkdir -p /opt/sg && tar xzf /tmp/sqlglot.tar.gz -C /opt/sg --strip-components=1 && rm /tmp/sqlglot.tar.gz \
+    && printf '%s\n' "$SQLGLOT_REV" > /opt/sg/.blast-radius-sqlglot-rev \
     && if [ "${FREE_CPU_BYTECODE}" = "1" ]; then \
         python -m compileall -q -j 0 --invalidation-mode checked-hash /opt/sg; \
     else \

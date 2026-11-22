@@ -1,13 +1,13 @@
-"""Build a comparison trace map on the exact Linux verifier image."""
+"""Record an isolated, full-catalog comparison map on the pinned verifier image."""
 
 import argparse
 import ast
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import nullcontext
 import gzip
 from hashlib import sha256
 import json
 import marshal
+import math
 import os
 from pathlib import Path
 import signal
@@ -16,232 +16,192 @@ import sys
 import tempfile
 import time
 
-from .selectors.map_format import catalog_records, catalog_sha256
-from .selectors.outcome_format import OPS, identity, site_id, tree_digest
-from .trace_operator_outcomes import BATCH_REJECTION, rewrite_code
+from .outcome_checkpoints import OutcomeCheckpoints, atomic_write, valid_report
+from .selectors.outcome_format import OPS, site_id, trace_header
+from .trace_operator_outcomes import rewrite_code
 
 
-def sites(root, requested):
-    found = {}
+def index_sites(root, cache):
+    indexed, skipped = {}, set()
     for path in sorted((root / "sqlglot").rglob("*.py")):
         rel = path.relative_to(root).as_posix()
-        for node in ast.walk(ast.parse(path.read_bytes(), filename=rel)):
-            if isinstance(node, ast.Compare):
-                for i, op in enumerate(node.ops):
-                    if type(op).__name__ in OPS:
-                        key = site_id(rel, node, i)
-                        found[key] = [type(op).__name__, node.lineno, node.end_lineno]
-    if requested is None:
-        return found
-    selected = {}
-    for target in requested:
-        matches = ([target] if target in found else
-                   [key for key, (_, lo, hi) in found.items()
-                    if any(target == f"{key.split(':', 1)[0]}:{line}" for line in range(lo, hi + 1))])
-        if not matches:
-            raise ValueError(f"unknown site: {target}")
-        selected.update((key, found[key]) for key in matches)
-    return selected
-
-
-def build_code_cache(root, cache, targets):
-    paths = (sorted((root / "sqlglot").rglob("*.py")) if targets is None else
-             [root / rel for rel in sorted({site.split(":", 1)[0] for site in targets})])
-    for path in paths:
-        rel = path.relative_to(root).as_posix()
+        source = path.read_bytes()
+        file_sites = {
+            site_id(rel, node, i): [type(op).__name__, node.lineno, node.end_lineno]
+            for node in ast.walk(ast.parse(source, filename=rel)) if isinstance(node, ast.Compare)
+            for i, op in enumerate(node.ops) if type(op).__name__ in OPS
+        }
+        indexed.update(file_sites)
         try:
-            source = path.read_bytes()
-            code, skipped, collision = rewrite_code(source, str(path), rel, targets)
-            dest = cache / rel
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_bytes(marshal.dumps((sha256(source).digest(), sys.flags.optimize, code, skipped, collision)))
+            code, excluded, collision = rewrite_code(source, str(path), rel, None)
+            skipped.update(excluded)
+            if collision:
+                skipped.update(file_sites)
+            if cache is not None:
+                dest = cache / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_bytes(marshal.dumps((sha256(source).digest(), sys.flags.optimize, code, excluded, collision)))
         except (OSError, SyntaxError, ValueError):
-            continue
+            skipped.update(file_sites)
+    return indexed, skipped
 
 
-def cgroup_cpu_seconds():
+def record_test(root, node, result, env, timeout):
+    started = time.monotonic()
+    argv = [sys.executable, "-m", "strategies.trace_operator_outcomes", str(root), node, str(result)]
+    report, reason = None, "trace did not produce a complete report"
     try:
-        stat = Path("/sys/fs/cgroup/cpu.stat").read_text()
-        for line in stat.splitlines():
-            if line.startswith("usage_usec "):
-                return int(line.split()[1]) / 1_000_000
-    except (OSError, ValueError):
-        pass
-    return None
+        with subprocess.Popen(argv, cwd=root, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                              start_new_session=True) as child:
+            try:
+                code = child.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                reason = f"trace process timeout ({timeout:.2f}s)"
+                try:
+                    os.killpg(child.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                code = None
+        if code == 0 and result.is_file():
+            report = json.loads(result.read_text())
+            if not valid_report(report):
+                return None, False, f"{time.monotonic() - started:.2f}s invalid trace report"
+        elif code is not None:
+            reason = f"trace exited with status {code}"
+    except (OSError, ValueError) as error:
+        return None, False, f"{time.monotonic() - started:.2f}s trace error: {error}"
+    capped = result.with_suffix(".capped").exists() or any(result.parent.glob(f"{result.stem}.worker-*.capped"))
+    seconds = time.monotonic() - started
+    state = ("capped" if capped else "complete" if report and report["complete"] else f"unknown ({reason})")
+    return (report, capped), True, f"{state} {seconds:.2f}s"
 
 
-def collect(root, tests, requested, indexed, jobs, budget, timeout, batches, compact, cache_code, profile):
-    deadline = time.monotonic() + budget
-    env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1]),
-               PYTHONDONTWRITEBYTECODE="1", SKIP_INTEGRATION="0", PYTHONHASHSEED="0",
-               OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1",
-               MKL_NUM_THREADS="1", PYTEST_DISABLE_PLUGIN_AUTOLOAD="1")
-    env.update(BR_OUTCOME_COMPACT="1" if compact else "0", BR_OUTCOME_PROFILE=profile or "",
-               BR_OUTCOME_CODE_CACHE="")
+def collect(root, tests, args, checkpoints):
+    deadline = time.monotonic() + (args.budget_seconds or math.inf)
     with tempfile.TemporaryDirectory() as temp:
         directory = Path(temp)
-        targets = None if requested is None else set(indexed)
-        flags = []
-        if targets is not None:
-            sites_path = directory / "sites.json"
-            sites_path.write_text(json.dumps(sorted(targets)))
-            flags = [str(sites_path)]
-        if cache_code:
-            cache = directory / "bytecode"
-            build_code_cache(root, cache, targets)
-            env["BR_OUTCOME_CODE_CACHE"] = str(cache)
+        cache = directory / "bytecode" if args.cache_rewrites else None
+        indexed, skipped = index_sites(root, cache)
+        env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1]),
+                   PYTHONDONTWRITEBYTECODE="1", SKIP_INTEGRATION="0", PYTHONHASHSEED="0",
+                   OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1", MKL_NUM_THREADS="1",
+                   PYTEST_DISABLE_PLUGIN_AUTOLOAD="1", PYTHON_CPU_COUNT="2",
+                   BR_OUTCOME_COMPACT="1" if args.compact_records else "0",
+                   BR_OUTCOME_CODE_CACHE=str(cache) if cache is not None else "",
+                   BR_OUTCOME_ENCOUNTER_BUDGET=str(args.encounter_budget),
+                   BR_OUTCOME_FAST_BUILTINS="1" if args.fast_builtins else "0",
+                   BR_OUTCOME_FAST_PROFILE="1" if args.fast_profile else "0")
 
-        work = []
-        for index, batch in enumerate(batches):
-            manifest = directory / f"batch-{index}-input.json"
-            manifest.write_text(json.dumps(batch))
-            work.append(("batch", index, str(manifest)))
-        work.extend(("test", test["number"], test["id"]) for test in tests)
-
-        def run(item):
-            mode, key, target = item
-            started = time.monotonic()
-            report = None
-            batch = batches[key] if mode == "batch" else None
-
-            def rejected(reason):
-                name = batch.get("commit", f"#{key + 1}")
-                print(f"Outcome batch {name} ({len(batch['tests'])} checks): {reason}",
-                      file=sys.stderr, flush=True)
-
+        def run(test):
+            number, node = test["number"], test["id"]
+            saved = checkpoints.get(number, node)
+            if saved is not None:
+                report, capped, source = saved
+                print(f"RWX_OUTCOME_PROGRESS {number} reused-{source}", file=sys.stderr, flush=True)
+                return report, capped
             if time.monotonic() >= deadline:
-                if batch is not None:
-                    rejected("build budget expired before batch started")
-                return mode, key, report, None
-            result = directory / f"{mode}-{key}.json"
-            argv = [sys.executable, "-m", "strategies.trace_operator_outcomes",
-                    mode, str(root), target, str(result), *flags]
-            with (tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace")
-                  if batch is not None else nullcontext(subprocess.DEVNULL)) as stderr:
-                reason = "trace did not produce a complete report"
-                try:
-                    trace_env = env if batch is not None else dict(env, PYTHON_CPU_COUNT="2")
-                    with subprocess.Popen(argv, cwd=root, env=trace_env, stdout=subprocess.DEVNULL,
-                                          stderr=stderr, start_new_session=True) as child:
-                        wait_started = time.monotonic()
-                        remaining = deadline - wait_started
-                        limit = max(0, min(remaining, timeout))
-                        try:
-                            code = child.wait(timeout=limit)
-                        except subprocess.TimeoutExpired:
-                            kind = "remaining build budget" if remaining <= timeout else "trace process timeout"
-                            reason = (f"trace process timed out after {time.monotonic() - wait_started:.2f}s "
-                                      f"({limit:.2f}s {kind})")
-                            try:
-                                os.killpg(child.pid, signal.SIGKILL)
-                            except ProcessLookupError:
-                                pass
-                            code = None
-                    if code == 0 and result.is_file():
-                        report = json.loads(result.read_text())
-                    elif code not in (None, 0):
-                        reason = f"trace exited with status {code}"
-                except (OSError, ValueError) as error:
-                    reason = f"trace error: {error}"
-                if batch is not None:
-                    stderr.seek(0)
-                    if report is None:
-                        rejected(reason)
-                    for line in stderr:
-                        if line.startswith(BATCH_REJECTION):
-                            rejected(line.removeprefix(BATCH_REJECTION).rstrip())
-                        else:
-                            print(line, file=sys.stderr, end="", flush=True)
-            return mode, key, report, time.monotonic() - started
+                return None
+            terminal, finished, detail = record_test(root, node, directory / f"test-{number}.json",
+                                                     env, args.timeout_seconds)
+            if finished:
+                checkpoints.put(number, node, *terminal)
+            print(f"RWX_OUTCOME_PROGRESS {number} {'' if finished else 'retry '}{detail}",
+                  file=sys.stderr, flush=True)
+            return terminal
 
-        completed, skipped, rows, verified = [], set(), {}, []
-        attempted, child_seconds = 0, 0.0
-        with ThreadPoolExecutor(jobs) as pool:
-            for mode, number, report, seconds in pool.map(run, work):
-                if mode == "test" and seconds is not None:
-                    attempted += 1
-                    child_seconds += seconds
+        complete, capped_tests, import_sites, rows = [], [], set(), {}
+        accounted = 0
+        with ThreadPoolExecutor(args.jobs) as pool:
+            for test, terminal in zip(tests, pool.map(run, tests)):
+                if terminal is None:
+                    continue
+                accounted += 1
+                number = test["number"]
+                report, capped = terminal
+                if capped:
+                    capped_tests.append(number)
                 if report is None:
                     continue
-                if profile:
-                    completed.append(number)
+                import_sites.update(set(report["import_sites"]) & indexed.keys())
+                if capped or not report["complete"]:
                     continue
+                complete.append(number)
                 skipped.update(report["skipped"])
-                observed = {key: None if values is None else [json.loads(value) for value in values]
-                            for key, values in report["sites"].items() if key in indexed}
-                if mode == "batch":
-                    verified.append({**batches[number], "rows": observed})
-                else:
-                    completed.append(number)
-                    for key, values in observed.items():
-                        rows.setdefault(key, {})[number] = values
-    return completed, sorted(skipped), rows, verified, attempted, child_seconds
+                for site, values in report["sites"].items():
+                    if site in indexed:
+                        rows.setdefault(site, {})[number] = (None if values is None else
+                                                            [json.loads(value) for value in values])
+    return accounted, {
+        "complete": complete, "skipped": sorted(skipped), "sites": indexed, "rows": rows,
+        "compact": args.compact_records, "selected": sorted(test["number"] for test in tests),
+        "committed": True, "workers_mode": "isolated", "import_sites": sorted(import_sites),
+        "capped": sorted(capped_tests),
+    }
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-root", type=Path, default=Path("/opt/sg"))
     parser.add_argument("--catalog", type=Path, required=True)
-    parser.add_argument("--output", type=Path)
-    scope = parser.add_mutually_exclusive_group(required=True)
-    scope.add_argument("--site", action="append", help="path:line, or exact path:line:column:link")
-    scope.add_argument("--all-sites", action="store_true")
-    parser.add_argument("--test-number", type=int, action="append")
-    parser.add_argument("--batch-file", type=Path, help="ordered verification batches from a shadow run")
-    parser.add_argument("--compact-records", action="store_true", help="dedupe type, identity and outcome vectors")
-    parser.add_argument("--cache-rewrites", action="store_true", help="compile each rewritten module once per build")
-    parser.add_argument("--profile-mode", choices=("plain", "rewrite"),
-                        help="time plain tests or rewritten tests without recording; never write a map")
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--checkpoint-dir", type=Path, required=True)
+    parser.add_argument("--resume-from", type=Path, help="seed checkpoints from verified 5fa9aa5 raw reports")
+    parser.add_argument("--committed-map", action="store_true", required=True)
+    parser.add_argument("--all-sites", action="store_true", required=True)
+    parser.add_argument("--workers-mode", choices=("isolated",), default="isolated")
+    parser.add_argument("--compact-records", action="store_true")
+    parser.add_argument("--cache-rewrites", action="store_true")
+    parser.add_argument("--fast-builtins", action="store_true")
+    parser.add_argument("--fast-profile", action="store_true")
+    parser.add_argument("--encounter-budget", type=int, default=0)
     parser.add_argument("--jobs", type=int, default=4)
-    parser.add_argument("--budget-seconds", type=float, default=540)
+    parser.add_argument("--budget-seconds", type=float, default=0, help="0 means no overall deadline")
     parser.add_argument("--timeout-seconds", type=float, default=120)
     args = parser.parse_args()
-    if args.profile_mode:
-        if args.output or args.batch_file or args.compact_records or (args.profile_mode == "plain" and args.cache_rewrites):
-            parser.error("profile modes do not accept map output, batches or records; only rewrite mode can cache")
-    elif args.output is None:
-        parser.error("--output is required to build a map")
-    start = time.monotonic()
-    cpu_start = cgroup_cpu_seconds()
+    if args.jobs < 1 or args.encounter_budget < 0:
+        parser.error("jobs must be positive and the encounter budget must be nonnegative")
+    if args.fast_builtins and not args.compact_records:
+        parser.error("--fast-builtins requires --compact-records")
+    if (not math.isfinite(args.budget_seconds) or args.budget_seconds < 0
+            or not math.isfinite(args.timeout_seconds) or args.timeout_seconds <= 0):
+        parser.error("the budget must be finite and nonnegative and the per-test timeout finite and positive")
+    if args.output.resolve().is_relative_to(args.checkpoint_dir.resolve()):
+        parser.error("final output must not be inside the checkpoint directory")
+    started = time.monotonic()
     root = args.source_root.resolve()
-    catalog = json.loads(args.catalog.read_text())["tests"]
-    tests = [test for test in catalog if not args.test_number or test["number"] in args.test_number]
-    tests.sort(key=lambda test: -test["seconds"])
-    if not tests:
-        parser.error("no catalog tests selected")
-    indexed = sites(root, args.site)
-    batches = [] if args.batch_file is None else json.loads(args.batch_file.read_text())
-    ids = {test["number"]: test["id"] for test in catalog}
-    for batch in batches:
-        cases = batch["tests"]
-        if (not cases or any(ids.get(number) != node or type(limit) not in (int, float)
-                             or not 0 < limit < float("inf") for number, node, limit in cases)
-                or len({case[0] for case in cases}) != len(cases)
-                or any(type(module) is not str for module in batch["imports"])):
-            parser.error("invalid verification batch")
-    completed, skipped, rows, verified, attempted, child_seconds = collect(
-        root, tests, args.site, indexed, args.jobs, args.budget_seconds, args.timeout_seconds,
-        batches, args.compact_records, args.cache_rewrites, args.profile_mode)
-    elapsed = time.monotonic() - start
-    cpu_end = cgroup_cpu_seconds()
-    cpu = cpu_end - cpu_start if cpu_start is not None and cpu_end is not None else None
-    utilization = f"; cgroup CPU {cpu:.2f}s ({cpu / elapsed:.2f} cores average)" if cpu is not None else ""
-    print(f"Trace work ({args.profile_mode or 'record'}): {attempted}/{len(tests)} tests attempted, "
-          f"{len(completed)} complete, {child_seconds:.2f}s summed child wall, "
-          f"{elapsed:.2f}s elapsed with {args.jobs} jobs{utilization}")
-    if args.profile_mode:
-        return
-    payload = {"identity": identity(), "tree": tree_digest(root),
-               "catalog": catalog_sha256(catalog_records(catalog)), "complete": completed,
-               "skipped": skipped, "sites": indexed, "rows": rows, "batches": verified,
-               "compact": args.compact_records}
+    tests = json.loads(args.catalog.read_text())["tests"]
+    if not tests or len({test["number"] for test in tests}) != len(tests):
+        parser.error("the catalog must contain tests with unique numbers")
+    header = trace_header(root, tests)
+    if not header["sqlglot_revision"]:
+        parser.error("a source revision marker from the pinned Docker image is required")
+    settings = {key: getattr(args, key) for key in (
+        "workers_mode", "all_sites", "timeout_seconds", "encounter_budget",
+        "compact_records", "cache_rewrites", "fast_builtins", "fast_profile")}
+    try:
+        checkpoints = OutcomeCheckpoints(args.checkpoint_dir, header, settings, args.resume_from)
+    except (OSError, ValueError) as error:
+        parser.error(str(error))
+    tests.sort(key=lambda test: (-test["seconds"], test["number"]))
+    accounted, data = collect(root, tests, args, checkpoints)
+    if accounted != len(tests):
+        parser.error(f"{len(tests) - accounted} tests still need recording; resume with the same --checkpoint-dir")
+    if header != trace_header(root, json.loads(args.catalog.read_text())["tests"]):
+        parser.error("committed map source or catalog changed during recording")
+    sites = len(data["sites"])
+    capped = data["capped"]
+    blocked = set(data["skipped"]) | set(data["import_sites"])
+    observed = sum(site not in blocked and any(by_test.values()) for site, by_test in data["rows"].items())
+    print(f"Encounter cap: {len(capped)} tests unknown at all {sites} indexed sites "
+          f"({len(capped) * sites} test/site pairs): {capped}")
+    print(f"Isolated coverage: {observed}/{sites} sites with usable observed rows; "
+          f"{len(data['import_sites'])} import/collection sites blocked")
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_bytes(gzip.compress(json.dumps(payload, separators=(",", ":")).encode(), mtime=0))
-    print(f"Comparison map: {len(completed)}/{len(tests)} complete, "
-          f"{len(tests) - len(completed)} unknown, {len(indexed)} sites "
-          f"({len(skipped)} excluded by the rewriter), {len(verified)}/{len(batches)} batches complete, "
-          f"{args.output.stat().st_size} bytes, "
-          f"{time.monotonic() - start:.2f} s")
+    payload = json.dumps({"header": header, **data}, separators=(",", ":")).encode()
+    atomic_write(args.output, gzip.compress(payload, mtime=0), 0o644)
+    print(f"Comparison map: {len(data['complete'])}/{len(tests)} complete, "
+          f"{len(tests) - len(data['complete'])} unknown, {sites} sites, "
+          f"{args.output.stat().st_size} bytes, {time.monotonic() - started:.2f} s")
 
 
 if __name__ == "__main__":

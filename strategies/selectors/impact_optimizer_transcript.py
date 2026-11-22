@@ -10,7 +10,7 @@ import sys
 import time
 
 from .impact_fresh_copy import FIXTURE_TEST_MODULE, FreshTableCopyImpact
-from .impact.selector import SG, WALL_BUDGET, log
+from .impact.selector import DECISION_LOG, SG, WALL_BUDGET, log
 
 OPTIMIZER_FIXTURE = "tests/fixtures/optimizer/optimizer.sql"
 DEPENDENCY_STAMPS = {
@@ -149,6 +149,9 @@ class OptimizerTranscriptImpact(FreshTableCopyImpact):
                     before = self._transcript(SG, deadline)
                     after = self._transcript(plan.root, deadline) if before else None
                     if before and before == after:
+                        if DECISION_LOG:
+                            for n in eligible:
+                                plan.decisions[n] = ("proven_unaffected", "OptimizerTranscriptImpact")
                         log(f"{cid}: complete optimizer fixture transcripts agree")
                         selected = [n for n in selected if n not in eligible]
                     else:
