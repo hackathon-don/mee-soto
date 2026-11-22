@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import os
 import sys
 from collections.abc import Sequence
 from functools import lru_cache
@@ -105,6 +106,10 @@ def main(config: Config = DEFAULT_CONFIG, argv: Sequence[str] = ()) -> None:
         write_schedule(selections, scheduler)
     total = sum(len(selected) for _, selected in selections)
     print(f"selected {total} tests across {len(patches)} commits", file=sys.stderr)
+    if __name__ == "__main__" and config.exit_after_output and args.mode is None:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(0)
 
 
 if __name__ == "__main__":
