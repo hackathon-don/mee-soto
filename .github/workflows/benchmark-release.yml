@@ -1,14 +1,14 @@
 name: Benchmark release
 
 on:
-  workflow_dispatch:
-    inputs:
-      publish_release:
-        description: Publish a GitHub release if the full batch has an eligible winner
-        type: boolean
-        default: false
+  push:
+    branches: [main]
 
 permissions: {}
+
+concurrency:
+  group: benchmark-release
+  cancel-in-progress: false
 
 jobs:
   benchmark:
@@ -46,7 +46,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    if: ${{ github.ref == 'refs/heads/main' && inputs.publish_release && needs.benchmark.outputs.eligible == 'true' }}
+    if: ${{ github.ref == 'refs/heads/main' && needs.benchmark.outputs.eligible == 'true' }}
     needs: benchmark
     runs-on: ubuntu-24.04
     timeout-minutes: 10
