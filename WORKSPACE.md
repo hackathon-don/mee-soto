@@ -54,7 +54,7 @@ the known failing tests. The same modes run directly as
   using `AllTestsSelector` and `LptScheduler`. No flag preserves the supplied
   config (or `DEFAULT_CONFIG`); `--experiment` replaces it, then `--data`
   overrides its data directory. The judge runs the image without flags, so the
-  `Dockerfile` `CMD` passes `--experiment impact-first-failure-tables-free-cpu`; the
+  `Dockerfile` `CMD` passes `--experiment impact-first-failure-tables-free-cpu-outcomes`; the
   Makefile targets override `CMD` and pass `EXPERIMENT` instead.
 - `strategies/selectors/` defines `Selector`, `CatalogTest`, and the `Patch`
   record (commit id and diff text). A selector is constructed once with
