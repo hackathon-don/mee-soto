@@ -1,6 +1,6 @@
 # Autoresearch program
 
-Driver: bandrew
+Driver: devin-8476467e2e6f4476840a7bef21fe735f
 
 This file is owned by Andrew. An agent running the loop reads it and never
 edits it. It adapts [karpathy/autoresearch](https://github.com/karpathy/autoresearch)
