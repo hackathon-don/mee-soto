@@ -12,6 +12,8 @@ LEGACY_RECORDER = {
     "strategies/selectors/outcome_format.py": "22735287d9be432e1757cfa724b16a632760de31a745cd18959014da757cef86",
     "strategies/trace_operator_outcomes.py": "303491a375c7d160c8ddc1ba1f69d81b8a5b657bb2c3b1600a7c38191903dc06",
 }
+# Raising these can only turn an unknown result complete, so complete legacy reports stay valid.
+LIMITS = ("timeout_seconds", "encounter_budget")
 
 
 def atomic_write(path, data, mode=0o600):
@@ -56,10 +58,17 @@ class OutcomeCheckpoints:
             raise ValueError(f"checkpoint manifest missing in nonempty directory: {directory}")
         else:
             atomic_write(manifest, json.dumps(metadata, sort_keys=True).encode())
+        self.rerecord_unknown = False
         if legacy is not None:
-            expected = {"header": header, "settings": settings, "recorder": LEGACY_RECORDER}
-            if read_json(legacy / "provenance.json") == expected:
+            provenance = read_json(legacy / "provenance.json")
+            old = provenance.get("settings") if isinstance(provenance, dict) else None
+            same = {key: value for key, value in settings.items() if key not in LIMITS}
+            if (isinstance(old, dict) and provenance == {"header": header, "recorder": LEGACY_RECORDER,
+                                                          "settings": {**old, **same}}
+                    and all(type(old.get(key)) in (int, float) and old[key] <= settings[key]
+                            for key in LIMITS)):
                 self.legacy = legacy
+                self.rerecord_unknown = any(old[key] != settings[key] for key in LIMITS)
             else:
                 print(f"Outcome resume: provenance missing or mismatched in {legacy}; re-recording",
                       file=sys.stderr, flush=True)
@@ -72,7 +81,7 @@ class OutcomeCheckpoints:
         if self.legacy is not None:
             raw = self.legacy / f"test-{number}.json"
             report = read_json(raw)
-            if valid_report(report):
+            if valid_report(report) and not (self.rerecord_unknown and not report["complete"]):
                 capped = raw.with_suffix(".capped").is_file() or any(
                     self.legacy.glob(f"test-{number}.worker-*.capped"))
                 self.put(number, node, report, capped)
