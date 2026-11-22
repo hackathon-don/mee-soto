@@ -68,7 +68,11 @@ jobs:
             BASE_SHA=$(git rev-parse HEAD^1)
           fi
           status=0
-          python3 tools/ci_score.py "$BASE_SHA" | tee -a "$GITHUB_STEP_SUMMARY" || status=$?
+          args=("$BASE_SHA")
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            args+=(--selection-errors)
+          fi
+          python3 tools/ci_score.py "${args[@]}" | tee -a "$GITHUB_STEP_SUMMARY" || status=$?
           {
             echo 'report<<RWX_SCORE_REPORT'
             cat "$GITHUB_STEP_SUMMARY"
