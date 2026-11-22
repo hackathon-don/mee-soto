@@ -9,6 +9,7 @@ from strategies.schedulers.variable_workers import VariableWorkerScheduler
 from strategies.selectors import Selector
 from strategies.selectors.all_tests import AllTestsSelector
 from strategies.selectors.impact import ImpactSelector
+from strategies.selectors.impact_executor_fixture_rows import ExecutorFixtureRowsImpact
 from strategies.selectors.impact_fresh_copy import FreshTableCopyImpact
 from strategies.selectors.impact_individual_proof import IndividualProofImpact
 from strategies.selectors.impact_optimizer_transcript import OptimizerTranscriptImpact
@@ -40,6 +41,9 @@ EXPERIMENTS: dict[str, Config] = {
     "impact-full-optimizer-proof": Config(selector_cls=OptimizerTranscriptImpact),
     "impact-variable-workers-matched": Config(
         selector_cls=OptimizerTranscriptImpact, scheduler_cls=VariableWorkerScheduler
+    ),
+    "impact-executor-fixture-rows": Config(
+        selector_cls=ExecutorFixtureRowsImpact, scheduler_cls=VariableWorkerScheduler
     ),
 }
 
