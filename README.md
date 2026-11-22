@@ -40,6 +40,11 @@ make e2e-dev  # same flow on the host's native architecture for a faster local l
 make check    # the output's format only
 ```
 
+To check a selector on patches it was not tuned on, `make holdout` builds and
+labels a held-out set from the pinned commit (once; it takes hours), then
+`make e2e-holdout` or `make e2e-full` (sample plus holdout) scores
+`EXPERIMENT` on it. See [WORKSPACE.md](WORKSPACE.md#held-out-patch-set).
+
 `make e2e` prints your simulated seconds and misses, which are exact for that output. The board adds the CPU seconds your container used and takes the middle of 3 runs, so expect it a little higher. See the [sample data rules](AGENTS.md#hard-rules) before changing the runner.
 
 `make e2e` (also `make e2e-amd64`) stays on linux/amd64 with the pinned base. `make e2e-dev` uses

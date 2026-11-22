@@ -45,6 +45,10 @@ New idea = new class in its own file + new `EXPERIMENTS` entry; don't edit exist
 - Use `make e2e` (or `make e2e-amd64` explicitly) for judge-compatible scores
   and misses. Use `make e2e-dev` for native-architecture iteration, not
   judge-compatible measurements. `make check` verifies output format only.
+- Use `make e2e-holdout` or `make e2e-full` to check misses on the held-out
+  set after `make holdout` has labeled it. They use the native dev image, so
+  they are not judge-compatible, and the held-out labels stay on the host like
+  `sample/answers.json`. Don't tune on the held-out results you report.
 
 ## Evidence for PRs
 

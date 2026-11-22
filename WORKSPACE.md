@@ -33,6 +33,9 @@ failure, and the selector's own CPU time. Lower is better.
 | `make test` | Unit tests on the host | |
 | `make autoresearch EXPERIMENT=<name>` | One [autoresearch](autoresearch/program.md) iteration: the experiment on all 30 public patches, then keep or reset HEAD | `autoresearch/results.tsv` |
 | `make autoresearch-validate EXPERIMENT=<name>` | The experiment on the held-out validation split (empty until new patches are frozen); for humans, not the loop | `autoresearch/validation.tsv` |
+| `make holdout` | Generates the [held-out patch set](#held-out-patch-set) once and labels it by running the full catalog in the dev image; resumes | `out/holdout/commits/`, `out/holdout/labels.jsonl` |
+| `make e2e-holdout` | `EXPERIMENT` on the labeled held-out set, in sample-sized batches, native dev image; `DEFERRAL=off` disables heavy-test deferral | `out/holdout/eval/<experiment>/` |
+| `make e2e-full` | The sample plus the held-out set on one dev image, one report | `out/holdout/eval/<experiment>/` |
 
 Container stderr is printed to the terminal and saved to `out/e2e.log`,
 `out/e2e-dev.log`, `out/check.log`, or `out/select.log`, respectively.
@@ -251,3 +254,35 @@ narrowing dropped 14,166 of 22,020 candidates, the base candidates produced
 `test_max_nodes` on three mutants when several copies ran at once; it passes
 under pytest on each of those patched trees. These results do not guarantee
 zero misses on hidden patches.
+
+## Held-out patch set
+
+The 30 public patches are tuning data. To check a selector on patches nothing
+was tuned on, generate a held-out set from the pinned commit, label it by
+running the full catalog, and score experiments on it. `make e2e` and the
+other existing targets, `make test`, CI and the image never touch it: the
+tools sit in `tools/` and the data in `out/holdout/`, both outside the Docker
+build context and Git.
+
+```sh
+make holdout                                   # once: generate 150 patches and label them (hours; resumes)
+make e2e-holdout EXPERIMENT=impact-tables      # score one experiment on the held-out set
+make e2e-holdout EXPERIMENT=impact-tables DEFERRAL=off
+make e2e-full EXPERIMENT=impact-tables         # the sample plus the held-out set, one report
+```
+
+`HOLDOUT_COUNT` (150), `HOLDOUT_BATCH` (30 patches per run, like the sample)
+and `HOLDOUT_JOBS` (6 parallel pytest processes while labeling) override the
+defaults; `NO_BUILD=1` reuses the dev image. All three targets use the native
+dev image, so like `make e2e-dev` they are not judge-compatible measurements.
+
+`tools/holdout_mutants.py` mirrors the sample's mix and edit shapes (code 16,
+fixture 8, multi 3, comment 3 of 30) on uniformly drawn lines.
+`tools/holdout_label/label.py` runs every catalog test file under pytest on
+each patched tree; a test is failing when any of its reports fails, subtests
+included, and it passes unpatched. On 8 sample commits (`2haz`, `2jrq`,
+`2vdj`, `3utz`, `535z`, `986c`, `9u5k`, `ary6`) its labels matched
+`sample/answers.json` exactly. `tools/holdout_eval.py` runs each batch under
+the scorer's flags with only that batch's patches mounted, then lists every
+missed test. `DEFERRAL=off` sets `BR_MIN_EVIDENCE` so high that
+`ImpactSelector` never defers its two heavy tests.
