@@ -2,7 +2,8 @@
 
 The base selector imports every changed module in a child process, so an
 import-time failure pulls in the module's importers. When a commit has no
-tests to run, that child exists only for the import check.
+tests to run or include, that child exists only for the import check. (A
+child also settles included tests, so a commit with any included test keeps it.)
 
 `tools/record_import_state.py` records, at the pinned SQLGlot commit, every
 function whose code ran while all `sqlglot/` and `tests/` modules were
@@ -165,7 +166,7 @@ class ImportStateImpact(FirstFailureTablesFreeCpuImpact):
 
         def choose_without_moot_imports(plan, *args, **kwargs):
             choose(plan, *args, **kwargs)
-            if plan.run or not plan.pending_imports:
+            if plan.run or plan.include or plan.deferred or not plan.pending_imports:
                 return
             for mod in list(plan.pending_imports):
                 proof = an.state_proofs.get(mod)
