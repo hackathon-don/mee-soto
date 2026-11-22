@@ -8,6 +8,7 @@ import gzip
 from hashlib import sha256
 import json
 import marshal
+import math
 import os
 from pathlib import Path
 import signal
@@ -16,6 +17,7 @@ import sys
 import tempfile
 import time
 
+from .outcome_checkpoints import OutcomeCheckpoints, atomic_write, valid_report
 from .selectors.outcome_format import OPS, site_id, trace_header
 from .trace_operator_outcomes import BATCH_REJECTION, CAP, rewrite_code
 
@@ -76,7 +78,7 @@ def cgroup_cpu_seconds():
 
 
 def collect(root, tests, requested, indexed, jobs, budget, timeout, batches, compact, cache_code, profile,
-            persistent, fast_builtins, encounter_budget, fast_profile):
+            persistent, fast_builtins, encounter_budget, fast_profile, checkpoints=None):
     deadline = time.monotonic() + budget
     env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1]),
                PYTHONDONTWRITEBYTECODE="1", SKIP_INTEGRATION="0", PYTHONHASHSEED="0",
@@ -171,6 +173,12 @@ def collect(root, tests, requested, indexed, jobs, budget, timeout, batches, com
                 print(f"Outcome batch {name} ({len(batch['tests'])} checks): {reason}",
                       file=sys.stderr, flush=True)
 
+            if checkpoints is not None:
+                saved = checkpoints.get(key, target)
+                if saved is not None:
+                    report, capped, source = saved
+                    print(f"RWX_OUTCOME_PROGRESS {key} reused-{source}", file=sys.stderr, flush=True)
+                    return mode, key, report, 0.0, capped
             if time.monotonic() >= deadline:
                 if batch is not None:
                     rejected("build budget expired before batch started")
@@ -181,17 +189,18 @@ def collect(root, tests, requested, indexed, jobs, budget, timeout, batches, com
             with (tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace")
                   if batch is not None else nullcontext(subprocess.DEVNULL)) as stderr:
                 reason = "trace did not produce a complete report"
+                retry = False
                 try:
                     trace_env = env if batch is not None else dict(env, PYTHON_CPU_COUNT="2")
                     with subprocess.Popen(argv, cwd=root, env=trace_env, stdout=subprocess.DEVNULL,
                                           stderr=stderr, start_new_session=True) as child:
                         wait_started = time.monotonic()
                         remaining = deadline - wait_started
-                        limit = max(0, min(remaining, timeout))
+                        limit = timeout if checkpoints is not None else max(0, min(remaining, timeout))
                         try:
                             code = child.wait(timeout=limit)
                         except subprocess.TimeoutExpired:
-                            kind = "remaining build budget" if remaining <= timeout else "trace process timeout"
+                            kind = "remaining build budget" if limit < timeout else "trace process timeout"
                             reason = (f"trace process timed out after {time.monotonic() - wait_started:.2f}s "
                                       f"({limit:.2f}s {kind})")
                             try:
@@ -205,6 +214,7 @@ def collect(root, tests, requested, indexed, jobs, budget, timeout, batches, com
                         reason = f"trace exited with status {code}"
                 except (OSError, ValueError) as error:
                     reason = f"trace error: {error}"
+                    retry = True
                 if batch is not None:
                     stderr.seek(0)
                     if report is None:
@@ -216,7 +226,18 @@ def collect(root, tests, requested, indexed, jobs, budget, timeout, batches, com
                             print(line, file=sys.stderr, end="", flush=True)
             capped = mode == "test" and (result.with_suffix(".capped").exists()
                                          or any(directory.glob(f"{result.stem}.worker-*.capped")))
-            return mode, key, report, time.monotonic() - started, capped
+            seconds = time.monotonic() - started
+            if checkpoints is not None:
+                if retry or report is not None and not valid_report(report):
+                    print(f"RWX_OUTCOME_PROGRESS {key} retry {seconds:.2f}s {reason}", file=sys.stderr, flush=True)
+                    return mode, key, None, None, False
+                checkpoints.put(key, target, report, capped)
+                state = ("capped" if capped else "complete" if report and report["complete"]
+                         else "unknown")
+                detail = f" {reason}" if state == "unknown" else ""
+                print(f"RWX_OUTCOME_PROGRESS {key} {state} {seconds:.2f}s{detail}",
+                      file=sys.stderr, flush=True)
+            return mode, key, report, seconds, capped
 
         completed, skipped, rows, verified, global_rows = [], set(), {}, [], {}
         import_sites, capped_tests = set(), []
@@ -283,7 +304,7 @@ def main():
     parser.add_argument("--catalog", type=Path, required=True)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--committed-map", action="store_true",
-                        help="require an all-site, full-catalog, patch-independent persistent map")
+                        help="require an all-site, full-catalog, patch-independent map")
     scope = parser.add_mutually_exclusive_group(required=True)
     scope.add_argument("--site", action="append", help="path:line, or exact path:line:column:link")
     scope.add_argument("--all-sites", action="store_true")
@@ -301,8 +322,11 @@ def main():
                         help="time plain tests or rewritten tests without recording; never write a map")
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--workers-mode", choices=("isolated", "persistent"), default="isolated")
-    parser.add_argument("--budget-seconds", type=float, default=540)
+    parser.add_argument("--budget-seconds", type=float, default=540,
+                        help="recording budget; 0 means no suite deadline for checkpointed recording")
     parser.add_argument("--timeout-seconds", type=float, default=120)
+    parser.add_argument("--checkpoint-dir", type=Path, help="resume or persist isolated committed-map progress")
+    parser.add_argument("--resume-from", type=Path, help="seed checkpoints from verified 5fa9aa5 raw reports")
     args = parser.parse_args()
     if args.jobs < 1:
         parser.error("--jobs must be positive")
@@ -317,6 +341,15 @@ def main():
         parser.error("--output is required to build a map")
     if args.committed_map and (not args.all_sites or args.test_number or args.batch_file or args.profile_mode):
         parser.error("--committed-map requires all sites and tests, recording, and no patch batches")
+    if ((args.checkpoint_dir or args.resume_from)
+            and (not args.committed_map or args.workers_mode != "isolated")):
+        parser.error("checkpointing requires isolated committed-map recording")
+    if args.resume_from is not None and args.checkpoint_dir is None:
+        parser.error("--resume-from requires --checkpoint-dir")
+    if (not math.isfinite(args.budget_seconds) or args.budget_seconds < 0
+            or args.budget_seconds == 0 and args.checkpoint_dir is None
+            or not math.isfinite(args.timeout_seconds) or args.timeout_seconds <= 0):
+        parser.error("budgets and per-test timeouts must be positive and finite (checkpointed budget may be 0)")
     start = time.monotonic()
     cpu_start = cgroup_cpu_seconds()
     root = args.source_root.resolve()
@@ -324,6 +357,17 @@ def main():
     header = None if args.profile_mode else trace_header(root, catalog)
     if args.committed_map and not header["sqlglot_revision"]:
         parser.error("--committed-map requires a source revision marker from the pinned Docker image")
+    checkpoints = None
+    if args.checkpoint_dir is not None:
+        if args.output.resolve().is_relative_to(args.checkpoint_dir.resolve()):
+            parser.error("final output must not be inside the checkpoint directory")
+        settings = {key: getattr(args, key) for key in (
+            "workers_mode", "all_sites", "timeout_seconds", "encounter_budget",
+            "compact_records", "cache_rewrites", "fast_builtins", "fast_profile")}
+        try:
+            checkpoints = OutcomeCheckpoints(args.checkpoint_dir, header, settings, args.resume_from)
+        except (OSError, ValueError) as error:
+            parser.error(str(error))
     tests = [test for test in catalog if not args.test_number or test["number"] in args.test_number]
     tests.sort(key=lambda test: (-test["seconds"], test["number"]))
     if not tests:
@@ -340,9 +384,9 @@ def main():
             parser.error("invalid verification batch")
     persistent = args.workers_mode == "persistent"
     completed, skipped, rows, verified, attempted, child_seconds, global_rows, import_sites, capped_tests = collect(
-        root, tests, args.site, indexed, args.jobs, args.budget_seconds, args.timeout_seconds,
+        root, tests, args.site, indexed, args.jobs, args.budget_seconds or math.inf, args.timeout_seconds,
         batches, args.compact_records, args.cache_rewrites, args.profile_mode, persistent, args.fast_builtins,
-        args.encounter_budget, args.fast_profile)
+        args.encounter_budget, args.fast_profile, checkpoints)
     elapsed = time.monotonic() - start
     cpu_end = cgroup_cpu_seconds()
     cpu = cpu_end - cpu_start if cpu_start is not None and cpu_end is not None else None
@@ -352,7 +396,9 @@ def main():
           f"{elapsed:.2f}s elapsed with {args.jobs} jobs{utilization}")
     if args.profile_mode:
         return
-    if args.committed_map and (attempted != len(tests) or elapsed >= args.budget_seconds):
+    if checkpoints is not None and attempted != len(tests):
+        parser.error(f"{len(tests) - attempted} tests still need recording; resume with the same --checkpoint-dir")
+    if args.committed_map and checkpoints is None and (attempted != len(tests) or elapsed >= args.budget_seconds):
         parser.error("committed map recording did not run the full catalog within the deadline")
     if args.committed_map and header != trace_header(root, json.loads(args.catalog.read_text())["tests"]):
         parser.error("committed map source or catalog changed during recording")
@@ -367,8 +413,12 @@ def main():
         payload.update(workers_mode="isolated", import_sites=import_sites, capped=capped_tests)
         print(f"Encounter cap: {len(capped_tests)} tests unknown at all {len(indexed)} indexed sites"
               f" ({len(capped_tests) * len(indexed)} test/site pairs): {capped_tests}")
+        blocked = set(skipped) | set(import_sites)
+        observed = sum(site not in blocked and any(by_test.values()) for site, by_test in rows.items())
+        print(f"Isolated coverage: {observed}/{len(indexed)} sites with usable observed rows; "
+              f"{len(import_sites)} import/collection sites blocked")
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_bytes(gzip.compress(json.dumps(payload, separators=(",", ":")).encode(), mtime=0))
+    atomic_write(args.output, gzip.compress(json.dumps(payload, separators=(",", ":")).encode(), mtime=0), 0o644)
     print(f"Comparison map: {len(completed)}/{len(tests)} complete, "
           f"{len(tests) - len(completed)} unknown, {len(indexed)} sites "
           f"({len(skipped)} excluded by the rewriter), {len(verified)}/{len(batches)} batches complete, "
