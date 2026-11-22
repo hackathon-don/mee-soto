@@ -13,6 +13,7 @@ from strategies.selectors.impact import ImpactSelector
 from strategies.selectors.impact_first_failure import FirstFailureImpact
 from strategies.selectors.impact_first_failure_tables import FirstFailureTablesImpact
 from strategies.selectors.impact_first_failure_tables_free_cpu import FirstFailureTablesFreeCpuImpact
+from strategies.selectors.impact_keys import KeyReadImpact
 from strategies.selectors.impact_optimizer_transcript import OptimizerTranscriptImpact
 from strategies.selectors.impact_tables import TableKeySelector
 
@@ -51,6 +52,11 @@ EXPERIMENTS: dict[str, Config] = {
     ),
     "impact-first-failure-tables-free-cpu": Config(
         selector_cls=FirstFailureTablesFreeCpuImpact,
+        scheduler_cls=VariableWorkerScheduler,
+        exit_after_output=True,
+    ),
+    "impact-first-failure-key-reads": Config(
+        selector_cls=KeyReadImpact,
         scheduler_cls=VariableWorkerScheduler,
         exit_after_output=True,
     ),
