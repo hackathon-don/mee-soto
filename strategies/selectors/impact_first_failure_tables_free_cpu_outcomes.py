@@ -93,9 +93,16 @@ class FirstFailureTablesFreeCpuOutcomesImpact(FirstFailureTablesFreeCpuImpact):
                 return set()
         except (IndexError, KeyError, OSError, SyntaxError, TokenError, TypeError, ValueError):
             return set()
+        tpcds = self.ctx.ix.pseudo.get("tpcds", {}).get("test")
+        # A complete record of the whole tpcds test covers every query a subset plan would run.
+        whole_record = (tpcds in complete and self.ctx.ids.get(tpcds) in selector.NEVER_RUN_IDS
+                        and tpcds not in set(self.ctx.ix.baseline_fail))
         drops = set()
         for number in analysis.cand:
-            if number not in complete or number in self.ctx.never or number in analysis.plan.subsets:
+            if number not in complete:
+                continue
+            if (number in self.ctx.never or number in analysis.plan.subsets) and not (
+                    number == tpcds and whole_record):
                 continue
             key = str(number)
             try:
