@@ -12,7 +12,7 @@ LEGACY_RECORDER = {
     "strategies/selectors/outcome_format.py": "22735287d9be432e1757cfa724b16a632760de31a745cd18959014da757cef86",
     "strategies/trace_operator_outcomes.py": "303491a375c7d160c8ddc1ba1f69d81b8a5b657bb2c3b1600a7c38191903dc06",
 }
-# Raising these can only turn an unknown result complete, so complete legacy reports stay valid.
+# Higher limits preserve complete legacy reports.
 LIMITS = ("timeout_seconds", "encounter_budget")
 
 
