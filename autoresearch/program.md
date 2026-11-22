@@ -349,3 +349,41 @@ seconds, and the commit subject.
     simulated savings under the same worker policy. Use the larger of the
     longest retained case and mean retained workload, plus the unchanged
     per-worker charge. The bound cannot authorize removal on its own.
+
+### Recorder-gated map ideas
+
+These four untested ideas are not from the competitor list. Start none until
+the persistent recorder covers the full suite within the 10-minute build
+limit on four cores. Then take them in the order below.
+Keep rule: Linux total improves, 0 misses, no added selector CPU.
+
+35. **Condition operand map.** Extend the outcome recorder from `is` and `==`
+    to conditions involving `if`, `in`, `and`, `or`, and `not`. The
+    recorder already supports `in` as a comparison operator; reuse it.
+    Impact maps track reach, and `TableKeySelector` narrows registry reads;
+    neither proves condition equivalence. Omit a test only when the patched
+    condition evaluates the same on all recorded operands, with complete
+    trace and batch evidence and unchanged short-circuit behavior and effects.
+
+36. **Function input map.** Record function arguments per test so a check
+    replays only the patched function. Impact maps link code to tests but
+    do not record argument values; the optimizer transcript proof and ideas
+    29–30 already cover specialized fixture replay. Reuse those boundaries
+    rather than rebuilding them. Before building a map, estimate savings and
+    audit miss risk from globals, mutable arguments, side effects, and
+    call order. Use the full check when the replay boundary is not proved.
+
+37. **Co-failure order map.** Learn from build-time mutants which existing
+    checks are likely to fail first, and use that signal only to order
+    `FirstFailureImpact` checks. The cutoff already exists; coverage-based
+    ordering was dropped (134.0 s versus 132.9 s). Do not retry that ranking
+    or add a skip rule. Preserve fixture boundaries, the existing stop and
+    fallback behavior, and the scheduler.
+
+38. **Mutant answer table.** Estimate the build cost of applying common
+    small edits and storing which tests fail for each; do not build the table
+    until the cost is known. Reuse the edit generation and full-suite labeling
+    machinery behind `holdout_mutants.py`, not the held-out evaluation
+    labels. That pipeline already labels mutants offline; the proposed
+    build-time lookup is new. An edit without an exact match falls back to
+    normal selection.
