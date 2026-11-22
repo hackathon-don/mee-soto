@@ -38,4 +38,6 @@ WORKDIR /app
 RUN python -m strategies.selectors.impact.static /opt/sg strategies/selectors/impact/maps/index.pkl.gz strategies/selectors/impact/maps/static.pkl.gz \
     && python -m compileall -q /app >/dev/null \
     && chmod -R a+rX /app
-CMD ["python", "/app/main.py"]
+# The judge runs the image without flags, so the submitted experiment is set
+# here. Local runs without --experiment still use DEFAULT_CONFIG (baseline).
+CMD ["python", "/app/main.py", "--experiment", "impact-full-optimizer-proof"]
