@@ -2,6 +2,7 @@
 
 import argparse
 from contextlib import redirect_stdout
+from dataclasses import replace
 from io import StringIO
 import json
 from pathlib import Path
@@ -14,9 +15,11 @@ from decimal import Decimal
 if __package__:
     from .ci_score import (DiagnosticRun, Score, experiment_names, median_run, print_experiment,
                            print_selection_errors, score_with_schedule)
+    from .ci_selection_report import FalseChecks, FalseScheduling
 else:
     from ci_score import (DiagnosticRun, Score, experiment_names, median_run, print_experiment,
                           print_selection_errors, score_with_schedule)
+    from ci_selection_report import FalseChecks, FalseScheduling
 
 
 REPEATS = 3
@@ -179,7 +182,47 @@ def trial_record(run):
         return None
     s = run.score
     schedule = None if run.schedule is None else {p: sorted(t) for p, t in run.schedule.items()}
-    return {"simulated": str(s.simulated), "cpu": str(s.cpu), "missed": s.missed, "schedule": schedule}
+    w = run.scheduling
+    scheduling = None if w is None else {"false": w.false, "total": w.total, "simulated_ms": w.simulated_ms}
+    return {"simulated": str(s.simulated), "cpu": str(s.cpu), "missed": s.missed, "schedule": schedule,
+            "scheduling": scheduling}
+
+
+def checks_record(checks):
+    return None if checks is None else {"false": checks.false, "total": checks.total, "cpu": str(checks.cpu)}
+
+
+def _count(value):
+    if type(value) is not int or value < 0:
+        raise ValueError("invalid count")
+    return value
+
+
+def load_checks(row):
+    if row is None:
+        return None
+    cpu = Decimal(row["cpu"])
+    if not cpu.is_finite() or cpu < 0 or _count(row["false"]) > _count(row["total"]):
+        raise ValueError("invalid false checks")
+    return FalseChecks(row["false"], row["total"], cpu)
+
+
+def load_scheduling(row):
+    if row is None:
+        return None
+    if _count(row["false"]) > _count(row["total"]) or type(row["simulated_ms"]) is not int:
+        raise ValueError("invalid false scheduling")
+    return FalseScheduling(row["false"], row["total"], row["simulated_ms"])
+
+
+def diagnostic_checks(name, run_score=score_with_schedule):
+    """One extra unscored run with CPU diagnostics, so logging overhead stays out of the ranking."""
+    print(f"Diagnostics run for {name}", file=sys.stderr)
+    try:
+        return run_score(name, cpu_diagnostics=True).checks
+    except (OSError, ValueError, subprocess.CalledProcessError):
+        print(f"Diagnostics run failed for {name}", file=sys.stderr)
+        return None
 
 
 def load_trial(row):
@@ -195,7 +238,8 @@ def load_trial(row):
                for p, tests in schedule.items()):
             raise ValueError("invalid trial schedule")
         schedule = {p: set(tests) for p, tests in schedule.items()}
-    return DiagnosticRun(Score(simulated, cpu, missed), None, schedule)
+    return DiagnosticRun(Score(simulated, cpu, missed), None, schedule,
+                         scheduling=load_scheduling(row.get("scheduling")))
 
 
 def load_trials(directory, names):
@@ -207,7 +251,9 @@ def load_trials(directory, names):
             name, attempt = obj["experiment"], obj["attempt"]
             if name not in names or type(attempt) is not int:
                 continue
-            rows = [load_trial(row) for row in obj["runs"]]
+            checks = load_checks(obj.get("false_checks"))
+            rows = [None if row is None else replace(row, checks=checks)
+                    for row in map(load_trial, obj["runs"])]
             digest = obj.get("map_digest")
             if len(rows) != REPEATS or not (isinstance(digest, str) and re.fullmatch(r"[0-9a-f]{64}", digest)):
                 continue
@@ -249,10 +295,12 @@ def main():
         if args.experiment not in names:
             parser.error("experiment is not registered at the measured commit")
         rows = collect([args.experiment])[args.experiment]
+        checks = diagnostic_checks(args.experiment)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps({
             "experiment": args.experiment, "attempt": args.attempt,
             "runs": [trial_record(run) for run in rows],
+            "false_checks": checks_record(checks),
         }) + "\n", encoding="utf-8")
     else:
         results, digests = load_trials(args.trials_dir, names)

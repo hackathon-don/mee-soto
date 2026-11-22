@@ -1,6 +1,9 @@
 """Report public-sample selection errors on the host after scoring."""
 
+from dataclasses import dataclass
+from decimal import Decimal
 import json
+import math
 from pathlib import Path
 import re
 
@@ -8,15 +11,99 @@ import re
 PATCH_ID = re.compile(r"[a-zA-Z0-9_-]+")
 
 
-def read_schedule(path: Path) -> dict[str, set[int]]:
-    schedule = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
+# Matches score.py's per-worker cost.
+WORKER_COST_MS = 2_000
+
+
+def read_workers(text: str) -> dict[str, list[list[int]]]:
+    workers = {}
+    for line in text.splitlines():
         row = json.loads(line)
         patch = row["commit"]
-        if not PATCH_ID.fullmatch(patch) or patch in schedule:
+        if not PATCH_ID.fullmatch(patch) or patch in workers:
             raise ValueError("invalid or duplicate patch in schedule")
-        schedule[patch] = {test for worker in row["workers"] for test in worker}
-    return schedule
+        if any(type(test) is not int for worker in row["workers"] for test in worker):
+            raise ValueError("invalid test number in schedule")
+        workers[patch] = [list(worker) for worker in row["workers"]]
+    return workers
+
+
+def _failures(answers_path: Path) -> dict[str, set[int]]:
+    answers = json.loads(answers_path.read_text(encoding="utf-8"))["commits"]
+    return {patch: set(row["failing"]) for patch, row in answers.items()}
+
+
+@dataclass(frozen=True)
+class FalseChecks:
+    """Verifier checks that completed for a test with no recorded failure on that patch."""
+    false: int
+    total: int
+    cpu: Decimal
+
+
+@dataclass(frozen=True)
+class FalseScheduling:
+    """Scheduled tests with no recorded failure, and the simulated time above an ideal replay."""
+    false: int
+    total: int
+    simulated_ms: int
+
+
+def false_checks(cpu, answers_path: Path) -> FalseChecks:
+    failures = _failures(answers_path)
+    if cpu.keys() - failures.keys():
+        raise ValueError("CPU diagnostics cover unknown patches")
+    false = total = 0
+    seconds = Decimal(0)
+    for patch, data in cpu.items():
+        # Tests left unrun after an early stop are not checks. A failed class fixture
+        # re-reports tests that already completed, so count each test once.
+        checked = {n for n, _ in data.timed} if data.checked is None else set(data.checked)
+        total += len(checked)
+        false += sum(n not in failures[patch] for n in checked)
+        # Per-check CPU exists only for children that exited cleanly.
+        seconds += sum((cpu for n, cpu in data.timed if n not in failures[patch]), Decimal(0))
+    return FalseChecks(false, total, seconds)
+
+
+def _simulated_ms(workers: list[list[int]], durations: dict[int, int]) -> int:
+    occupied = [worker for worker in workers if worker]
+    if not occupied:
+        return 0
+    return max(sum(durations[test] for test in worker) for worker in occupied) + WORKER_COST_MS * len(occupied)
+
+
+def false_scheduling(workers: dict[str, list[list[int]]], ideal: dict[str, list[list[int]]],
+                     answers_path: Path, tests_path: Path) -> FalseScheduling:
+    """Compare each patch with the same scheduler replaying only its known failures."""
+    failures = _failures(answers_path)
+    if workers.keys() != failures.keys() or ideal.keys() != failures.keys():
+        raise ValueError("public labels and schedules cover different patches")
+    # Same rounding as score.py.
+    durations = {test["number"]: math.floor(test["seconds"] * 1000 + 0.5)
+                 for test in json.loads(tests_path.read_text(encoding="utf-8"))["tests"]}
+    false = total = extra_ms = 0
+    for patch, rows in workers.items():
+        sent = {test for worker in rows for test in worker}
+        total += len(sent)
+        false += len(sent - failures[patch])
+        if failures[patch] <= sent:
+            extra_ms += _simulated_ms(rows, durations) - _simulated_ms(ideal[patch], durations)
+    return FalseScheduling(false, total, extra_ms)
+
+
+def render_false_work(checks: FalseChecks | None, scheduling: FalseScheduling | None) -> str:
+    """Counts use public-sample labels; a false item here can still fail on a hidden patch."""
+    if checks is None:
+        check_line = "**False checks:** unavailable (no per-check diagnostics)."
+    else:
+        check_line = f"**False checks:** {checks.false} of {checks.total}, {checks.cpu:.2f} s CPU."
+    if scheduling is None:
+        schedule_line = "**False scheduling:** unavailable."
+    else:
+        schedule_line = (f"**False scheduling:** {scheduling.false} of {scheduling.total}, "
+                         f"{scheduling.simulated_ms / 1000:.2f} s simulated.")
+    return f"{check_line}  \n{schedule_line}"
 
 
 def selection_errors(schedule: dict[str, set[int]], answers_path: Path) -> str:
