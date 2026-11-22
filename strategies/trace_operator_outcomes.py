@@ -22,7 +22,7 @@ from multiprocessing.context import SpawnProcess
 from multiprocessing.process import BaseProcess
 from pathlib import Path
 
-from .selectors.outcome_format import EXECUTOR_CLOCK_PATH, OPS, executor_clock_line, site_id
+from .selectors.outcome_format import EXECUTOR_CLOCK_PATH, OPS, executor_clock_lines, site_id
 
 
 HOOK = "__rwx_record_comparison__"
@@ -209,7 +209,7 @@ class Recorder(importlib.abc.MetaPathFinder):
             name = getattr(arg, "__name__", "")
             if (arg is wall_time and self.executor_clock is not None
                     and frame.f_globals.get("__name__") == "sqlglot.executor"
-                    and frame.f_code is self.executor_clock[0] and frame.f_lineno == self.executor_clock[1]):
+                    and frame.f_code is self.executor_clock[0] and frame.f_lineno in self.executor_clock[1]):
                 return
             iso_parse = name == "fromisoformat" and (
                 owner is datetime.date or owner is datetime.datetime or owner is datetime.time
@@ -341,10 +341,10 @@ class Loader(importlib.machinery.SourceFileLoader):
         if collision:
             self.recorder.reject(f"comparison observer name collision in {self.rel}")
         if self.rel == EXECUTOR_CLOCK_PATH:
-            line = executor_clock_line(source)
+            lines = executor_clock_lines(source)
             functions = [part for part in code.co_consts
                          if isinstance(part, CodeType) and part.co_qualname == "execute"]
-            self.recorder.executor_clock = (functions[0], line) if line is not None and len(functions) == 1 else None
+            self.recorder.executor_clock = (functions[0], lines) if lines and len(functions) == 1 else None
         self.recorder.skipped.update(skipped)
         return code
 

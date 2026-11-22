@@ -13,16 +13,16 @@ EXECUTOR_CLOCK_PATH = "sqlglot/executor/__init__.py"
 EXECUTOR_CLOCK_HASH = "a2149f32cf1912b05017ecbf033a0e2834f1da32eaa5a7c2e69572fc7d8fa94f"
 
 
-def executor_clock_line(source):
+def executor_clock_lines(source):
     functions = [node for node in ast.parse(source).body
                  if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "execute"]
     if len(functions) != 1 or functions[0].decorator_list:
-        return None
+        return ()
     node = functions[0]
     body = b"\n".join(source.split(b"\n")[node.lineno - 1:node.end_lineno])
     if hashlib.sha256(body).hexdigest() == EXECUTOR_CLOCK_HASH:
-        return node.lineno + 44
-    return None
+        return tuple(node.lineno + offset for offset in (44, 47, 54, 57))
+    return ()
 
 
 def site_id(path, node, index):
