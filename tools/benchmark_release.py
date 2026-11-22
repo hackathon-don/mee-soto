@@ -75,8 +75,12 @@ def score_record(run):
     }
 
 
-def make_record(commit, results):
-    all_complete = BASELINE in results and all(completed(rows) for rows in results.values())
+def make_record(commit, results, *, jobs_succeeded=True, map_digests=None):
+    """A batch is complete only if every job succeeded and all experiments used one file map."""
+    digests = set((map_digests or {}).values())
+    same_map = map_digests is None or (len(digests) == 1 and map_digests.keys() == results.keys())
+    all_complete = (jobs_succeeded and same_map and BASELINE in results
+                    and all(completed(rows) for rows in results.values()))
     ranking = rank(results)
     experiments = {}
     for name, rows in results.items():
@@ -93,6 +97,9 @@ def make_record(commit, results):
         "sample": "public",
         "repeats": REPEATS,
         "complete": all_complete,
+        "jobs_succeeded": jobs_succeeded,
+        "same_map": same_map,
+        "map_digest": next(iter(digests)) if same_map and digests else None,
         "baseline": BASELINE,
         "ranking": ranking,
         "winner": ranking[0] if all_complete and ranking else None,
@@ -132,6 +139,10 @@ def render_markdown(record, results):
             winner = record["winner"]
             median = record["experiments"][winner]["median_total_seconds"]
             print(f"Winner: `{winner}` with an unrounded median total of {median} s.")
+        elif not record["jobs_succeeded"]:
+            print("No release: an experiment job failed in the latest attempt.")
+        elif not record["same_map"]:
+            print("No release: experiments were measured with different file maps.")
         elif not record["complete"]:
             print("No release: the benchmark batch is incomplete.")
         else:
@@ -197,13 +208,15 @@ def load_trials(directory, names):
             if name not in names or type(attempt) is not int:
                 continue
             rows = [load_trial(row) for row in obj["runs"]]
-            if len(rows) != REPEATS:
+            digest = obj.get("map_digest")
+            if len(rows) != REPEATS or not (isinstance(digest, str) and re.fullmatch(r"[0-9a-f]{64}", digest)):
                 continue
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             continue
         if name not in latest or attempt > latest[name][0]:
-            latest[name] = (attempt, rows)
-    return {name: latest[name][1] if name in latest else [None] * REPEATS for name in names}
+            latest[name] = (attempt, rows, digest)
+    results = {name: latest[name][1] if name in latest else [None] * REPEATS for name in names}
+    return results, {name: latest[name][2] for name in names if name in latest}
 
 
 def checked_commit(parser, expected):
@@ -225,6 +238,8 @@ def main():
     report = commands.add_parser("report", help="combine trial files into the reports")
     report.add_argument("--trials-dir", type=Path, required=True)
     report.add_argument("--output-dir", type=Path, required=True)
+    report.add_argument("--jobs-failed", action="store_true",
+                        help="an experiment job failed in the latest attempt, so nothing can release")
     args = parser.parse_args()
     commit = checked_commit(parser, args.expected_sha)
     names = registered_at(commit)
@@ -240,8 +255,8 @@ def main():
             "runs": [trial_record(run) for run in rows],
         }) + "\n", encoding="utf-8")
     else:
-        results = load_trials(args.trials_dir, names)
-        record = make_record(commit, results)
+        results, digests = load_trials(args.trials_dir, names)
+        record = make_record(commit, results, jobs_succeeded=not args.jobs_failed, map_digests=digests)
         args.output_dir.mkdir(parents=True, exist_ok=True)
         (args.output_dir / "results.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
         (args.output_dir / "report.md").write_text(render_markdown(record, results), encoding="utf-8")

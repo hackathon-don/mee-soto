@@ -64,6 +64,12 @@ jobs:
           python3 tools/benchmark_release.py --expected-sha "$GITHUB_SHA" measure \
             --experiment "$EXPERIMENT" --attempt "$GITHUB_RUN_ATTEMPT" \
             --output "$RUNNER_TEMP/rwx-trials/$EXPERIMENT.json"
+          # Each job builds its own image; the report requires every experiment to share one file map.
+          digest="$(docker run --rm --platform linux/amd64 --entrypoint sha256sum blast-radius-entry \
+            /app/strategies/selectors/file_map.json.gz | cut -d' ' -f1)"
+          trials="$RUNNER_TEMP/rwx-trials/$EXPERIMENT.json"
+          jq --arg digest "$digest" '.map_digest = $digest' "$trials" > "$trials.tmp"
+          mv "$trials.tmp" "$trials"
       - name: Save trials
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -99,12 +105,19 @@ jobs:
           path: ${{ runner.temp }}/rwx-trials
       - name: Combine trials into reports
         id: combine
+        env:
+          # A failed rerun leaves earlier attempts' artifacts behind, so job results decide completeness.
+          BENCHMARK_RESULT: ${{ needs.benchmark.result }}
         run: |
           set -euo pipefail
           directory="$RUNNER_TEMP/rwx-benchmark"
           mkdir -p "$RUNNER_TEMP/rwx-trials"
+          flags=()
+          if [[ "$BENCHMARK_RESULT" != success ]]; then
+            flags+=(--jobs-failed)
+          fi
           python3 tools/benchmark_release.py --expected-sha "$GITHUB_SHA" report \
-            --trials-dir "$RUNNER_TEMP/rwx-trials" --output-dir "$directory"
+            --trials-dir "$RUNNER_TEMP/rwx-trials" --output-dir "$directory" "${flags[@]}"
           eligible="$(jq -r '.complete and (.winner != null)' "$directory/results.json")"
           echo "eligible=$eligible" >> "$GITHUB_OUTPUT"
           echo "artifact=benchmark-$GITHUB_SHA-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
