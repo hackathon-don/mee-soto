@@ -141,6 +141,28 @@ For a local diagnostic run on native Linux amd64, use
 to stderr and the timed CI run includes logging overhead. The default and judge
 entrypoints do not enable this instrumentation.
 
+## Benchmark release
+
+**Benchmark release** runs on every push to main and benchmarks every
+registered experiment three times at the pushed commit, without CPU
+diagnostics so logging overhead stays out of the ranked totals. One job builds
+the image, so every experiment uses the same file map. Each experiment
+runs in its own job on its own machine, and a report job combines their trials;
+an experiment whose job fails counts as failed runs. The workflow saves the human report and structured results as artifacts, even when nothing
+is released. The
+baseline is a reference; eligible candidates finish all three runs without a
+miss and are ranked by exact median simulated-plus-CPU time. An incomplete batch
+or no eligible candidate cannot release. A batch is incomplete when an experiment
+job failed in the latest attempt or the experiments were measured with different
+file maps.
+
+When the batch has an eligible winner, a separate job validates the saved
+result and attaches both reports to a release tagged at the measured commit.
+The release notes are the full report. A pull request that changes the workflow
+or its report tools runs the same benchmark and release validation as a dry run
+that stops before creating a tag or release. It does not change the default experiment or submit anything to the
+leaderboard.
+
 ## Impact selector
 
 `strategies/selectors/impact/` holds `ImpactSelector`. The maps committed
