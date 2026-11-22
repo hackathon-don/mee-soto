@@ -8,15 +8,11 @@ permissions: {}
 
 jobs:
   unit:
-    name: Unit tests (${{ matrix.runner }})
-    runs-on: ${{ matrix.runner }}
+    name: Unit tests (Sengi Basic 8)
+    runs-on: sengi-basic-8-ubuntu-2404
     timeout-minutes: 10
     permissions:
       contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        runner: [ubuntu-24.04, sengi-basic-4-ubuntu-2404]
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -30,15 +26,11 @@ jobs:
           make test
 
   image:
-    name: Image build (${{ matrix.runner }})
-    runs-on: ${{ matrix.runner }}
+    name: Image build (Sengi Basic 8)
+    runs-on: sengi-basic-8-ubuntu-2404
     timeout-minutes: 20
     permissions:
       contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        runner: [ubuntu-24.04, sengi-basic-4-ubuntu-2404]
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -53,15 +45,16 @@ jobs:
           tags: blast-radius-entry
           load: true
           push: false
-          cache-from: type=gha,scope=sengi-trial-1795383200-${{ matrix.runner }}
-          cache-to: type=gha,mode=max,scope=sengi-trial-1795383200-${{ matrix.runner }}
+          # Reuse the Sengi cache seeded by the Basic 4 run.
+          cache-from: type=gha,scope=sengi-trial-1795383200-sengi-basic-4-ubuntu-2404
+          cache-to: type=gha,mode=max,scope=sengi-trial-1795383200-sengi-basic-4-ubuntu-2404
       - name: Save image
         run: |
           set -euo pipefail
           docker save blast-radius-entry | gzip -1 > "$RUNNER_TEMP/image.tar.gz"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: image-${{ matrix.runner }}-${{ github.sha }}-${{ github.run_attempt }}
+          name: image-sengi-basic-8-ubuntu-2404-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/image.tar.gz
           if-no-files-found: error
           compression-level: 0
