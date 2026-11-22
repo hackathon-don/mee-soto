@@ -5,6 +5,7 @@ from pathlib import Path
 
 from strategies.schedulers import Scheduler
 from strategies.schedulers.lpt import LptScheduler
+from strategies.schedulers.variable_workers import VariableWorkerScheduler
 from strategies.selectors import Selector
 from strategies.selectors.all_tests import AllTestsSelector
 from strategies.selectors.impact import ImpactSelector
@@ -33,6 +34,9 @@ EXPERIMENTS: dict[str, Config] = {
     "map-narrow": Config(selector_cls=NarrowMapSelector),
     "impact": Config(selector_cls=ImpactSelector),
     "impact-full-optimizer-proof": Config(selector_cls=OptimizerTranscriptImpact),
+    "impact-variable-workers-matched": Config(
+        selector_cls=OptimizerTranscriptImpact, scheduler_cls=VariableWorkerScheduler
+    ),
 }
 
 DEFAULT_CONFIG = EXPERIMENTS["baseline"]
