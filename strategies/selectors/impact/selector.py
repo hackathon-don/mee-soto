@@ -403,11 +403,9 @@ def run_all(plans: list[Plan], ids, limits, deadline: float):
                         ch.limit = limits.get(msg["s"], 30.0) + 5.0
                     elif "d" in msg:
                         n = msg["d"]
-                        if ch.diagnostics is not None:
-                            if "cpu" in msg:
-                                ch.diagnostics["timed"].append((n, msg["cpu"]))
-                            else:
-                                ch.diagnostics["uncertain"] = True
+                        # Untimed results (import or lookup failures) stay in other child CPU.
+                        if ch.diagnostics is not None and "cpu" in msg:
+                            ch.diagnostics["timed"].append((n, msg["cpu"]))
                         if "cpu" in msg:
                             ch.plan.cpu[n] = msg["cpu"]
                         if not msg["ok"]:
@@ -636,7 +634,7 @@ class ImpactSelector:
                 print(
                     "RWX_CPU_V1 " + json.dumps({
                         "commit": plan.cid,
-                        "child_cpu": round(plan.child_cpu, 6),
+                        "child_cpu": plan.child_cpu,
                         **plan.diagnostics,
                     }, separators=(",", ":")),
                     file=sys.stderr,
