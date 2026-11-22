@@ -138,6 +138,7 @@ class Plan:
     __slots__ = (
         "cid", "include", "run", "notes", "failed", "root", "error", "cpu", "subsets", "fixture_edits",
         "est_run_ms", "wall", "deferred", "child_cpu", "pending_imports", "failed_imports",
+        "diagnostics",
     )
 
     def __init__(self, cid):
@@ -157,6 +158,7 @@ class Plan:
         self.child_cpu = 0.0
         self.pending_imports: dict[str, int] = {}
         self.failed_imports: set[int] = set()
+        self.diagnostics: dict | None = None
 
 
 def choose(
@@ -303,7 +305,8 @@ def preimport():
 
 
 class Child:
-    __slots__ = ("pid", "fd", "buf", "plan", "pending", "current", "last", "limit", "started", "stopped")
+    __slots__ = ("pid", "fd", "buf", "plan", "pending", "current", "last", "limit", "started",
+                 "stopped", "diagnostics")
 
     def __init__(self, pid, fd, plan, pending):
         self.pid = pid
@@ -316,6 +319,8 @@ class Child:
         self.limit = IDLE_LIMIT
         self.started = time.time()
         self.stopped = False
+        self.diagnostics = ({"timed": [], "total": False, "uncertain": False}
+                            if plan.diagnostics is not None else None)
 
 
 def spawn_child(plan: Plan, tests: list[int], ids: dict[int, str], limits: dict[int, float]) -> Child:
@@ -381,8 +386,12 @@ def run_all(plans: list[Plan], ids, limits, deadline: float):
                     try:
                         msg = json.loads(line)
                     except ValueError:
+                        if ch.diagnostics is not None:
+                            ch.diagnostics["uncertain"] = True
                         continue
                     if "cpu_total" in msg:
+                        if ch.diagnostics is not None:
+                            ch.diagnostics["total"] = True
                         ch.plan.child_cpu += msg["cpu_total"]
                     elif "i" in msg:
                         module = msg["i"]
@@ -394,6 +403,9 @@ def run_all(plans: list[Plan], ids, limits, deadline: float):
                         ch.limit = limits.get(msg["s"], 30.0) + 5.0
                     elif "d" in msg:
                         n = msg["d"]
+                        # Untimed results (import or lookup failures) stay in other child CPU.
+                        if ch.diagnostics is not None and "cpu" in msg:
+                            ch.diagnostics["timed"].append((n, msg["cpu"]))
                         if "cpu" in msg:
                             ch.plan.cpu[n] = msg["cpu"]
                         if not msg["ok"]:
@@ -454,10 +466,20 @@ def finish(ch: Child, active, queue, now):
         os.close(ch.fd)
     except OSError:
         pass
+    status = None
     try:
-        os.waitpid(ch.pid, 0)
+        _, status = os.waitpid(ch.pid, 0)
     except ChildProcessError:
         pass
+    if ch.diagnostics is not None:
+        complete = (
+            status == 0 and not ch.pending and not ch.buf and not ch.stopped
+            and ch.diagnostics["total"] and not ch.diagnostics["uncertain"]
+        )
+        if complete:
+            ch.plan.diagnostics["timed"].extend(ch.diagnostics["timed"])
+        else:
+            ch.plan.diagnostics["incomplete_children"] += 1
     if not ch.pending:
         return
     if ch.current is not None:
@@ -578,6 +600,7 @@ class ImpactSelector:
         ctx, ms, ids = self.ctx, self.ms, self.ids
         limits = ctx.limits if ctx else {n: 30.0 for n in ms}
         plans: list[Plan] = []
+        diagnostics = os.environ.get("BR_CPU_DIAGNOSTICS") == "1"
         for patch in commits:
             cid = patch.commit
             try:
@@ -597,13 +620,26 @@ class ImpactSelector:
                 plan.error = repr(e)
                 plan.include = set(ms)
                 log(f"{cid}: analysis failed, running everything: {e!r}")
+            if diagnostics:
+                plan.diagnostics = {"timed": [], "incomplete_children": 0}
             plans.append(plan)
 
         if any(p.run or p.pending_imports for p in plans):
             preimport()
             run_all(plans, ids, limits, self.start_wall + WALL_BUDGET)
 
-        return dict(self._selected(plans))
+        selected = dict(self._selected(plans))
+        if diagnostics:
+            for plan in plans:
+                print(
+                    "RWX_CPU_V1 " + json.dumps({
+                        "commit": plan.cid,
+                        "child_cpu": plan.child_cpu,
+                        **plan.diagnostics,
+                    }, separators=(",", ":")),
+                    file=sys.stderr,
+                )
+        return selected
 
     @staticmethod
     def _selected(plans: list[Plan]) -> Iterator[tuple[str, list[int]]]:

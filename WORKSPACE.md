@@ -130,6 +130,17 @@ The score comment reports selection errors for each experiment's median-total ru
 It uses the emitted worker schedule and public labels on the scoring host only; labels
 do not reach the selector container.
 
+## PR selector CPU
+
+The separate CPU comment uses the median-total run. It joins completed verifier
+timings to the final worker schedule; shared and incomplete work is not assigned
+to individual tests. A fixture-subset check is not a full test.
+
+For a local diagnostic run on native Linux amd64, use
+`make e2e EXPERIMENT=impact CPU_DIAGNOSTICS=1`. Detailed records go only
+to stderr and the timed CI run includes logging overhead. The default and judge
+entrypoints do not enable this instrumentation.
+
 ## Impact selector
 
 `strategies/selectors/impact/` holds `ImpactSelector`. The maps committed

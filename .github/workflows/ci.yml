@@ -19,6 +19,7 @@ jobs:
     timeout-minutes: 25
     outputs:
       report: ${{ steps.score.outputs.report }}
+      cpu_report: ${{ steps.score.outputs.cpu_report }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -69,10 +70,18 @@ jobs:
           fi
           status=0
           args=("$BASE_SHA")
+          cpu_report="$RUNNER_TEMP/rwx-cpu-report.md"
           if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
-            args+=(--selection-errors)
+            args+=(--selection-errors --cpu-report "$cpu_report")
           fi
           python3 tools/ci_score.py "${args[@]}" | tee -a "$GITHUB_STEP_SUMMARY" || status=$?
+          if [[ $status == 0 && -s "$cpu_report" ]]; then
+            {
+              echo 'cpu_report<<RWX_CPU_REPORT'
+              cat "$cpu_report"
+              echo 'RWX_CPU_REPORT'
+            } >> "$GITHUB_OUTPUT"
+          fi
           {
             echo 'report<<RWX_SCORE_REPORT'
             cat "$GITHUB_STEP_SUMMARY"
@@ -113,6 +122,39 @@ jobs:
             const previous = comments.find(comment =>
               comment.user?.login === 'github-actions[bot]' && comment.body?.startsWith(marker)
             );
+            if (previous) {
+              await github.rest.issues.updateComment({...context.repo, comment_id: previous.id, body});
+            } else {
+              await github.rest.issues.createComment({...context.repo, issue_number, body});
+            }
+
+
+      - name: Update PR selector CPU comment
+        if: ${{ !cancelled() }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          CPU_REPORT: ${{ needs.sample.outputs.cpu_report }}
+        with:
+          script: |
+            const issue_number = context.issue.number;
+            const pr = await github.rest.pulls.get({...context.repo, pull_number: issue_number});
+            if (pr.data.state !== 'open' || pr.data.head.sha !== context.payload.pull_request.head.sha) {
+              return;
+            }
+
+            const marker = '<!-- rwx-ci-cpu -->';
+            const run = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              ...context.repo, issue_number
+            });
+            const previous = comments.find(comment =>
+              comment.user?.login === 'github-actions[bot]' && comment.body?.startsWith(marker)
+            );
+            const cpu = process.env.CPU_REPORT;
+            if (!cpu && !previous) {
+              return;
+            }
+            const body = `${marker}\n${cpu || 'No CPU diagnostics available for this run.'}\n\n[GitHub Actions run](${run})`;
             if (previous) {
               await github.rest.issues.updateComment({...context.repo, comment_id: previous.id, body});
             } else {
