@@ -109,8 +109,9 @@ def main(config: Config = DEFAULT_CONFIG, argv: Sequence[str] = ()) -> None:
         for commit, selected in selections:
             print(json.dumps({"commit": commit, "selected": selected}))
     else:
-        if isinstance(scheduler, WorkerSlackInsuranceScheduler) and isinstance(selector, ImpactSelector):
-            scheduler.impact_index = selector.ix
+        if (isinstance(scheduler, WorkerSlackInsuranceScheduler)
+                and isinstance(selector, ImpactSelector) and selector.ctx is not None):
+            scheduler.impact_index = selector.ctx.ix
         write_schedule(selections, scheduler)
     total = sum(len(selected) for _, selected in selections)
     print(f"selected {total} tests across {len(patches)} commits", file=sys.stderr)
