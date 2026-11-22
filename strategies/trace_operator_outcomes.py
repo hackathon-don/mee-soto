@@ -2,6 +2,7 @@
 
 import ast
 import atexit
+import datetime
 import enum
 import importlib.abc
 import importlib.machinery
@@ -173,9 +174,13 @@ class Recorder(importlib.abc.MetaPathFinder):
         if event == "c_call" and relevant(frame):
             module = getattr(arg, "__module__", None)
             owner = getattr(arg, "__self__", None)
+            name = getattr(arg, "__name__", "")
+            iso_parse = name == "fromisoformat" and (
+                owner is datetime.date or owner is datetime.datetime or owner is datetime.time
+            )
             if (module in ("time", "_thread", "_random") or
-                    module in ("os", "posix") and getattr(arg, "__name__", "") in ("urandom", "getrandom") or
-                    isinstance(owner, type) and owner.__module__ == "datetime" or
+                    module in ("os", "posix") and name in ("urandom", "getrandom") or
+                    isinstance(owner, type) and owner.__module__ == "datetime" and not iso_parse or
                     getattr(type(owner), "__module__", "") in ("_random", "numpy.random._generator")):
                 self.unknown = True
         elif event == "call" and frame.f_back and relevant(frame.f_back):
@@ -199,7 +204,9 @@ class Recorder(importlib.abc.MetaPathFinder):
         if fullname != "sqlglot" and not fullname.startswith("sqlglot."):
             return None
         spec = importlib.machinery.PathFinder.find_spec(fullname, path, target)
-        if not spec or not isinstance(spec.loader, importlib.machinery.SourceFileLoader):
+        if spec is None:
+            return None
+        if not isinstance(spec.loader, importlib.machinery.SourceFileLoader) or spec.origin is None:
             self.unknown = True
             return spec
         origin = Path(spec.origin)

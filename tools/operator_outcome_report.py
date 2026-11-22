@@ -26,7 +26,7 @@ def main():
         if args.patch and patch not in args.patch:
             continue
         patch_cpu = cpu.get(patch)
-        timed = dict(patch_cpu.timed) if patch_cpu and not patch_cpu.incomplete else {}
+        timed = dict(patch_cpu.timed) if patch_cpu and not patch_cpu.incomplete_children else {}
         for number, status in sorted(data["checks"].items(), key=lambda item: int(item[0])):
             seconds = timed.get(int(number))
             print(f"{patch},{number},{status},{seconds if seconds is not None else 'NA'}")
