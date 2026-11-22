@@ -37,9 +37,39 @@ jobs:
           names="$(python3 tools/benchmark_release.py --expected-sha "$GITHUB_SHA" list)"
           echo "names=$names" >> "$GITHUB_OUTPUT"
 
+  # Build once so every experiment runs the same image and file map; the map
+  # collector is time-limited, so separate builds can produce different maps.
+  image:
+    if: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      artifact: ${{ steps.save.outputs.artifact }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Build and save image
+        id: save
+        run: |
+          set -euo pipefail
+          make build
+          docker save blast-radius-entry | gzip -1 > "$RUNNER_TEMP/image.tar.gz"
+          echo "artifact=image-$GITHUB_SHA-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ steps.save.outputs.artifact }}
+          path: ${{ runner.temp }}/image.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
   # One job per experiment: each gets its own machine, so trials never share CPU.
   benchmark:
-    needs: experiments
+    needs: [experiments, image]
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
@@ -56,15 +86,22 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.13"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ needs.image.outputs.artifact }}
+          path: ${{ runner.temp }}/image
+      - name: Load image
+        run: gunzip -c "$RUNNER_TEMP/image/image.tar.gz" | docker load
       - name: Measure ${{ matrix.experiment }}
         env:
           EXPERIMENT: ${{ matrix.experiment }}
+          NO_BUILD: "1"
         run: |
           set -euo pipefail
           python3 tools/benchmark_release.py --expected-sha "$GITHUB_SHA" measure \
             --experiment "$EXPERIMENT" --attempt "$GITHUB_RUN_ATTEMPT" \
             --output "$RUNNER_TEMP/rwx-trials/$EXPERIMENT.json"
-          # Each job builds its own image; the report requires every experiment to share one file map.
+          # The report refuses to rank experiments measured with different file maps.
           digest="$(docker run --rm --platform linux/amd64 --entrypoint sha256sum blast-radius-entry \
             /app/strategies/selectors/file_map.json.gz | cut -d' ' -f1)"
           trials="$RUNNER_TEMP/rwx-trials/$EXPERIMENT.json"

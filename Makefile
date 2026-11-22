@@ -28,8 +28,8 @@ build:
 	docker build --platform linux/amd64 --tag $(IMAGE) .
 
 # Runs your image once on the sample commits under the scorer's limits and
-# scores what it printed.
-e2e: build
+# scores what it printed. NO_BUILD=1 reuses an already loaded $(IMAGE).
+e2e: $(if $(NO_BUILD),,build)
 	@mkdir -p $(OUT)
 	docker run --platform linux/amd64 $(RUN_FLAGS) $(DIAGNOSTIC_FLAGS) $(IMAGE) python /app/local_cpu.py python /app/main.py --experiment $(EXPERIMENT) 2>&1 > $(OUT)/e2e.jsonl | tee $(OUT)/e2e.log >&2
 	python3 score.py $(SAMPLE) $(SAMPLE)/answers.json $(OUT)/e2e.jsonl --cpu-log $(OUT)/e2e.log
