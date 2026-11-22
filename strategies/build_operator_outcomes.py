@@ -71,14 +71,14 @@ def cgroup_cpu_seconds():
 
 
 def collect(root, tests, requested, indexed, jobs, budget, timeout, batches, compact, cache_code, profile,
-            persistent):
+            persistent, fast_builtins):
     deadline = time.monotonic() + budget
     env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1]),
                PYTHONDONTWRITEBYTECODE="1", SKIP_INTEGRATION="0", PYTHONHASHSEED="0",
                OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1",
                MKL_NUM_THREADS="1", PYTEST_DISABLE_PLUGIN_AUTOLOAD="1")
     env.update(BR_OUTCOME_COMPACT="1" if compact else "0", BR_OUTCOME_PROFILE=profile or "",
-               BR_OUTCOME_CODE_CACHE="")
+               BR_OUTCOME_CODE_CACHE="", BR_OUTCOME_FAST_BUILTINS="1" if fast_builtins else "0")
     with tempfile.TemporaryDirectory() as temp:
         directory = Path(temp)
         targets = None if requested is None else set(indexed)
@@ -270,6 +270,8 @@ def main():
     parser.add_argument("--test-number", type=int, action="append")
     parser.add_argument("--batch-file", type=Path, help="ordered verification batches from a shadow run")
     parser.add_argument("--compact-records", action="store_true", help="dedupe type, identity and outcome vectors")
+    parser.add_argument("--fast-builtins", action="store_true",
+                        help="use prebuilt compact rows after evaluating exact builtin operands")
     parser.add_argument("--cache-rewrites", action="store_true", help="compile each rewritten module once per build")
     parser.add_argument("--profile-mode", choices=("plain", "rewrite"),
                         help="time plain tests or rewritten tests without recording; never write a map")
@@ -280,6 +282,8 @@ def main():
     args = parser.parse_args()
     if args.jobs < 1:
         parser.error("--jobs must be positive")
+    if args.fast_builtins and not args.compact_records:
+        parser.error("--fast-builtins requires --compact-records")
     if args.profile_mode:
         if args.output or args.batch_file or args.compact_records or (args.profile_mode == "plain" and args.cache_rewrites):
             parser.error("profile modes do not accept map output, batches or records; only rewrite mode can cache")
@@ -306,7 +310,7 @@ def main():
     persistent = args.workers_mode == "persistent"
     completed, skipped, rows, verified, attempted, child_seconds, global_rows = collect(
         root, tests, args.site, indexed, args.jobs, args.budget_seconds, args.timeout_seconds,
-        batches, args.compact_records, args.cache_rewrites, args.profile_mode, persistent)
+        batches, args.compact_records, args.cache_rewrites, args.profile_mode, persistent, args.fast_builtins)
     elapsed = time.monotonic() - start
     cpu_end = cgroup_cpu_seconds()
     cpu = cpu_end - cpu_start if cpu_start is not None and cpu_end is not None else None

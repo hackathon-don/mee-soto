@@ -35,6 +35,7 @@ DATETIME_TYPE = datetime.datetime
 TIMEZONE_TYPE = datetime.timezone
 SIMPLE = (type(None), bool, int, float, str, bytes)
 SIMPLE_TAGS = {id(cls): cls.__name__ for cls in SIMPLE}
+FAST_SCALARS = (type(None), bool, int, float, str)
 OPERATORS = {
     "Is": operator.is_, "IsNot": operator.is_not, "Eq": operator.eq, "NotEq": operator.ne,
     "In": lambda a, b: operator.contains(b, a),
@@ -102,6 +103,21 @@ def operand_tag(value):
     if type(cls) is enum.EnumType and describe(value) is not None:
         return f"{cls.__module__}.{cls.__qualname__}"
     return None
+
+
+def builtin_rows():
+    return {
+        id(left): {
+            id(right): tuple(
+                (left.__name__, right.__name__, same, (same, not same, equal, not equal, member))
+                for member in (None, False, True)
+                for same in (False, True)
+                for equal in (False, True)
+            )
+            for right in FAST_SCALARS
+        }
+        for left in FAST_SCALARS
+    }
 
 
 class Rewrite(ast.NodeTransformer):
@@ -179,6 +195,10 @@ class Recorder(importlib.abc.MetaPathFinder):
         cache = os.environ.get("BR_OUTCOME_CODE_CACHE")
         self.cache = Path(cache) if cache else None
         self.rewrite_only = os.environ.get("BR_OUTCOME_PROFILE") == "rewrite"
+        self.encounters = None
+        if self.compact and os.environ.get("BR_OUTCOME_FAST_BUILTINS") == "1":
+            self.builtins = builtin_rows()
+            self.observe = self.observe_builtins
 
     def reject(self, reason):
         if not self.unknown and self.diagnose:
@@ -267,7 +287,47 @@ class Recorder(importlib.abc.MetaPathFinder):
             spec.loader = Loader(fullname, spec.origin, self, rel)
         return spec
 
+    def observe_builtins(self, key, op, left, right, chain):
+        if key is None or self.rewrite_only or self.unknown:
+            return type(self).observe(self, key, op, left, right, chain)
+        seen = self.rows.get(key, ())
+        if seen is None and self.encounters is None:
+            return OPERATORS[op](left, right)
+        lt, rt = type(left), type(right)
+        left_rows = self.builtins.get(id(lt))
+        templates = left_rows.get(id(rt)) if left_rows else None
+        if templates is None:
+            return type(self).observe(self, key, op, left, right, chain)
+        try:
+            same, equal = left is right, left == right
+            member = (left in right) if lt is str and rt is str else None
+        except Exception:
+            return type(self).observe(self, key, op, left, right, chain)
+        if self.encounters is not None:
+            self.encounters[key] = self.encounters.get(key, 0) + 1
+        if seen is not None:
+            index = (0 if member is None else 8 if member else 4) + 2 * same + equal
+            if seen:
+                seen.add(templates[index])
+                if len(seen) > CAP:
+                    self.rows[key] = None
+            else:
+                self.rows[key] = {templates[index]}
+        if op == "Is":
+            return same
+        if op == "IsNot":
+            return not same
+        if op == "Eq":
+            return equal
+        if op == "NotEq":
+            return not equal
+        if op == "In" and member is not None:
+            return member
+        return OPERATORS[op](left, right)
+
     def observe(self, key, op, left, right, chain):
+        if self.encounters is not None and key is not None:
+            self.encounters[key] = self.encounters.get(key, 0) + 1
         if not self.rewrite_only and not self.unknown and self.rows.get(key, ()) is not None:
             try:
                 describe_operand = operand_tag if self.compact else describe

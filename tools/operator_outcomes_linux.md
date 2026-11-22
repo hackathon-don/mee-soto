@@ -16,7 +16,7 @@ docker build --platform linux/amd64 -t "$img" .
 
 docker_trace() {
   docker run --rm --network none --cpus 4 --memory 8g --memory-swap 8g \
-    --read-only --tmpfs /tmp:rw,exec,size=1g,mode=1777 --env HOME=/tmp \
+    --read-only --tmpfs /tmp:rw,exec,size=1g,mode=1777 --env HOME=/tmp --env BR_OUTCOME_METRICS \
     --user "$(id -u):$(id -g)" \
     -v "$PWD/sample/tests.json:/data/tests.json:ro" -v "$out:/out" \
     "$img" python -m strategies.build_operator_outcomes \
@@ -119,6 +119,18 @@ docker_trace --all-sites "${profile_tests[@]}" --workers-mode persistent --compa
   --output /out/profile-persistent.json.gz 2>&1 | tee "$out/profile-persistent.log"
 python3 -m tools.compare_operator_outcomes "$out/profile-fast.json.gz" "$out/profile-persistent.json.gz"
 ```
+
+To find a slow test, set `BR_OUTCOME_METRICS=timing` for a persistent run
+and capture stderr. Use `BR_OUTCOME_METRICS=encounters` to also count
+comparison hook calls per site in the test process (not its spawned workers).
+The start markers identify the in-flight test if a shard times out.
+Use identical metrics settings for before/after timings.
+
+For an opt-in comparison with `--compact-records`, repeat the persistent
+trace with `--fast-builtins`. The fast path computes identity, equality,
+and applicable membership from the live operands before reusing an outcome
+row. Enum classes, subclasses, bytes and other operands take the ordinary
+path; no result is inferred from types alone.
 
 Compare attempts and completions as well as elapsed time; a quicker run
 with more rejected traces is not a coverage win. The builder reports elapsed

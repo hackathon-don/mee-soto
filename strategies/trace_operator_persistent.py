@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import time
 
 from .trace_operator_outcomes import Recorder, Workers
 
@@ -14,6 +15,7 @@ def trace_shard(root, manifest, result, sites):
     numbers = {node: number for number, node in cases}
     order = {node: index for index, (_, node) in enumerate(cases)}
     plain = os.environ.get("BR_OUTCOME_PROFILE") == "plain"
+    metrics = os.environ.get("BR_OUTCOME_METRICS")
     recorder = None if plain else Recorder(root, None if sites is None else set(json.loads(Path(sites).read_text())))
     if recorder is not None:
         recorder.install()
@@ -33,19 +35,30 @@ def trace_shard(root, manifest, result, sites):
             def pytest_runtest_protocol(self, item):
                 number = numbers[item.nodeid]
                 progress.write(f"{number}\n")
+                if metrics:
+                    started = time.monotonic()
+                    print(f"RWX_OUTCOME_START {number} {item.nodeid}", file=sys.stderr, flush=True)
+                counts = {} if metrics == "encounters" and recorder is not None else None
+                if recorder is not None:
+                    recorder.encounters = counts
                 if plain:
                     yield
-                    return
-                global_rows, global_unknown = recorder.rows, recorder.unknown
-                recorder.rows, recorder.unknown = {}, False
-                try:
-                    yield
-                    if (recorder.unknown and not recorder.rewrite_only) or sys.getprofile() != recorder.profile:
-                        bad.add(number)
-                    else:
-                        rows[number] = recorder.report()["sites"]
-                finally:
-                    recorder.rows, recorder.unknown = global_rows, global_unknown
+                else:
+                    global_rows, global_unknown = recorder.rows, recorder.unknown
+                    recorder.rows, recorder.unknown = {}, False
+                    try:
+                        yield
+                        if (recorder.unknown and not recorder.rewrite_only) or sys.getprofile() != recorder.profile:
+                            bad.add(number)
+                        else:
+                            rows[number] = recorder.report()["sites"]
+                    finally:
+                        recorder.rows, recorder.unknown = global_rows, global_unknown
+                        recorder.encounters = None
+                if metrics:
+                    elapsed = time.monotonic() - started
+                    data = {"test": number, "seconds": elapsed, "encounters": counts}
+                    print("RWX_OUTCOME_METRIC " + json.dumps(data), file=sys.stderr, flush=True)
 
             def pytest_runtest_logreport(self, report):
                 number = numbers[report.nodeid]
