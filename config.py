@@ -8,6 +8,7 @@ from strategies.schedulers.lpt import LptScheduler
 from strategies.selectors import Selector
 from strategies.selectors.all_tests import AllTestsSelector
 from strategies.selectors.impact import ImpactSelector
+from strategies.selectors.impact_optimizer_transcript import OptimizerTranscriptImpact
 from strategies.selectors.map_narrow import NarrowMapSelector
 from strategies.selectors.map_only import MapSelector
 
@@ -31,6 +32,7 @@ EXPERIMENTS: dict[str, Config] = {
     "map": Config(selector_cls=MapSelector),
     "map-narrow": Config(selector_cls=NarrowMapSelector),
     "impact": Config(selector_cls=ImpactSelector),
+    "impact-full-optimizer-proof": Config(selector_cls=OptimizerTranscriptImpact),
 }
 
 DEFAULT_CONFIG = EXPERIMENTS["baseline"]
