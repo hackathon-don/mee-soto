@@ -12,8 +12,10 @@ import sys
 from tempfile import TemporaryDirectory
 
 if __package__:
+    from .ci_cpu_report import PatchCpu, parse_cpu, render_cpu
     from .ci_selection_report import read_schedule, selection_errors
 else:
+    from ci_cpu_report import PatchCpu, parse_cpu, render_cpu
     from ci_selection_report import read_schedule, selection_errors
 
 
@@ -90,18 +92,26 @@ def score(experiment: str, *, log_score: bool = True, options=()) -> Score:
 @dataclass(frozen=True)
 class DiagnosticRun:
     score: Score
+    cpu: dict[str, PatchCpu] | None
     schedule: dict[str, set[int]] | None
 
 
-def score_with_schedule(experiment: str) -> DiagnosticRun:
+def score_with_schedule(experiment: str, *, cpu_diagnostics: bool = False) -> DiagnosticRun:
     # Each run gets new paths; a missing diagnostic cannot reuse a previous run.
     with TemporaryDirectory(prefix="rwx-ci-") as out:
-        score_row = score(experiment, options=(f"OUT={out}",))
+        options = (f"OUT={out}",) + (("CPU_DIAGNOSTICS=1",) if cpu_diagnostics else ())
+        score_row = score(experiment, options=options)
         try:
             schedule = read_schedule(Path(out) / "e2e.jsonl")
         except (OSError, ValueError, KeyError, TypeError):
             schedule = None
-        return DiagnosticRun(score_row, schedule)
+        cpu = None
+        if cpu_diagnostics:
+            try:
+                cpu = parse_cpu((Path(out) / "e2e.log").read_text(encoding="utf-8"))
+            except (OSError, ValueError, KeyError, TypeError):
+                pass
+        return DiagnosticRun(score_row, cpu, schedule)
 
 
 def median_run(runs: list[DiagnosticRun]) -> DiagnosticRun:
@@ -138,6 +148,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("base", help="Previous branch tip or PR base commit SHA")
     parser.add_argument("--selection-errors", action="store_true", help="Report median-run selection errors for PR CI")
+    parser.add_argument("--cpu-report", type=Path, help="Write opt-in CPU diagnostics for PR CI")
     args = parser.parse_args()
     try:
         experiments = added_experiments(args.base)
@@ -149,9 +160,10 @@ def main() -> None:
             score("map", log_score=False)
             print_scoring_check(commit, passed=True)
             return
-        if args.selection_errors:
+        if args.selection_errors or args.cpu_report:
             diagnostics = {
-                experiment: [score_with_schedule(experiment) for _ in range(3)]
+                experiment: [score_with_schedule(experiment, cpu_diagnostics=bool(args.cpu_report))
+                             for _ in range(3)]
                 for experiment in experiments
             }
             results = {name: [run.score for run in runs] for name, runs in diagnostics.items()}
@@ -164,13 +176,17 @@ def main() -> None:
             print_scoring_check(commit, passed=False)
         parser.exit(1, f"{error}\n")
 
+    cpu_sections = ["## RWX selector CPU"]
     for experiment, runs in results.items():
         print_experiment(experiment, runs, baseline)
         if experiment in diagnostics:
             run = median_run(diagnostics[experiment])
             print()
             print_selection_errors(run)
+            cpu_sections.append(render_cpu(experiment, run.score.cpu, run.cpu, run.schedule))
         print()
+    if args.cpu_report:
+        args.cpu_report.write_text("\n\n".join(cpu_sections) + "\n", encoding="utf-8")
     print(f"Machine: linux/amd64  \nCommit hash: {commit}")
 
 

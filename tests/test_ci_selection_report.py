@@ -25,9 +25,9 @@ class SelectionReportTests(unittest.TestCase):
     def test_multi_experiment_ci_retains_score_sections(self):
         Score = ci_score.Score
         Run = ci_score.DiagnosticRun
-        first = Run(Score(Decimal(11), Decimal(8), 0), {"p": set()})
-        mid = Run(Score(Decimal(10), Decimal(5), 0), {"p": {1}})
-        last = Run(Score(Decimal(10), Decimal(1), 0), {"p": set()})
+        first = Run(Score(Decimal(11), Decimal(8), 0), None, {"p": set()})
+        mid = Run(Score(Decimal(10), Decimal(5), 0), None, {"p": {1}})
+        last = Run(Score(Decimal(10), Decimal(1), 0), None, {"p": set()})
         baseline = Score(Decimal(100), Decimal(1), 0)
         with tempfile.TemporaryDirectory() as directory:
             response = io.StringIO()
