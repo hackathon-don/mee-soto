@@ -9,6 +9,7 @@ from strategies.schedulers.variable_workers import VariableWorkerScheduler
 from strategies.selectors import Selector
 from strategies.selectors.all_tests import AllTestsSelector
 from strategies.selectors.impact import ImpactSelector
+from strategies.selectors.impact_first_failure import FirstFailureImpact
 from strategies.selectors.impact_optimizer_transcript import OptimizerTranscriptImpact
 from strategies.selectors.impact_tables import TableKeySelector
 from strategies.selectors.map_narrow import NarrowMapSelector
@@ -41,6 +42,9 @@ EXPERIMENTS: dict[str, Config] = {
     "impact-tables": Config(selector_cls=TableKeySelector),
     "impact-tables-variable-workers": Config(
         selector_cls=TableKeySelector, scheduler_cls=VariableWorkerScheduler
+    ),
+    "impact-first-failure": Config(
+        selector_cls=FirstFailureImpact, scheduler_cls=VariableWorkerScheduler
     ),
 }
 
