@@ -218,5 +218,5 @@ jobs:
           gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
             -f "ref=refs/tags/$tag" -f "sha=$GITHUB_SHA" >/dev/null
           gh release create "$tag" reports/report.md reports/results.json \
-            --repo "$GITHUB_REPOSITORY" --verify-tag --latest=false \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --latest \
             --title "Public benchmark: ${GITHUB_SHA:0:12}" --notes-file release-notes.md
