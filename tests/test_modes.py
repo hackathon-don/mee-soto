@@ -1,9 +1,13 @@
 import contextlib
 import io
 import json
+import os
+import runpy
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from config import Config
 from main import main
@@ -14,6 +18,17 @@ CATALOG = [
     {"number": 2, "id": "test_b", "file": "test.py", "seconds": 5.0},
     {"number": 3, "id": "test_c", "file": "test.py", "seconds": 3.0},
 ]
+
+
+class StartupTest(unittest.TestCase):
+    def test_cli_reexecs_with_seed_zero(self):
+        entrypoint = str(Path(__file__).resolve().parents[1] / "main.py")
+        argv = [entrypoint, "--help"]
+        for env in ({}, {"PYTHONHASHSEED": "random"}):
+            with self.subTest(env=env), patch.dict(os.environ, env, clear=True), patch.object(sys, "argv", argv):
+                with patch("os.execve", side_effect=SystemExit) as execve, self.assertRaises(SystemExit):
+                    runpy.run_path(entrypoint, run_name="__main__")
+                execve.assert_called_once_with(sys.executable, [sys.executable, *argv], {"PYTHONHASHSEED": "0"})
 
 
 class ModeTest(unittest.TestCase):

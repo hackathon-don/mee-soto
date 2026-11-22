@@ -17,6 +17,9 @@ from collections.abc import Sequence
 from functools import lru_cache
 from pathlib import Path
 
+if __name__ == "__main__" and os.environ.get("PYTHONHASHSEED") != "0":
+    os.execve(sys.executable, [sys.executable, *sys.argv], {**os.environ, "PYTHONHASHSEED": "0"})
+
 from config import DEFAULT_CONFIG, EXPERIMENTS, Config
 from strategies.schedulers import Scheduler
 from strategies.selectors import CatalogTest, Patch
