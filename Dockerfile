@@ -25,6 +25,14 @@ RUN python /build/tools/build_file_map.py \
     --source-root /opt/sg \
     --output /out/file_map.json.gz \
     --jobs 4 --budget-seconds 360 --timeout-seconds 90 --limit "${MAP_BUILD_LIMIT}"
+COPY strategies/build_dialect_entry_map.py strategies/trace_dialect_entry.py /build/strategies/
+COPY strategies/selectors/dialect_entry_format.py /build/strategies/selectors/
+ARG DIALECT_ENTRY_MAP_BUDGET=360
+RUN python -m strategies.build_dialect_entry_map \
+    --catalog /build/sample/tests.json \
+    --source-root /opt/sg \
+    --output /out/dialect_entry_map.json.gz \
+    --jobs 4 --budget-seconds "${DIALECT_ENTRY_MAP_BUDGET}" --timeout-seconds 90
 
 # The scorer runs linux/amd64 without network, with a read-only root and
 # unprivileged user. ImpactSelector runs tests against /opt/sg, so this stage
@@ -32,6 +40,7 @@ RUN python /build/tools/build_file_map.py \
 # name-index build below waits for the collector instead of competing with it.
 FROM deps AS runtime
 COPY --from=map-builder /out/file_map.json.gz /app/strategies/selectors/file_map.json.gz
+COPY --from=map-builder /out/dialect_entry_map.json.gz /app/strategies/selectors/dialect_entry_map.json.gz
 COPY main.py config.py local_cpu.py /app/
 COPY strategies/ /app/strategies/
 WORKDIR /app

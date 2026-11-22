@@ -9,6 +9,7 @@ from strategies.schedulers.variable_workers import VariableWorkerScheduler
 from strategies.selectors import Selector
 from strategies.selectors.all_tests import AllTestsSelector
 from strategies.selectors.impact import ImpactSelector
+from strategies.selectors.impact_dialect_entry import DialectEntryImpact
 from strategies.selectors.impact_first_failure import FirstFailureImpact
 from strategies.selectors.impact_fresh_copy import FreshTableCopyImpact
 from strategies.selectors.impact_individual_proof import IndividualProofImpact
@@ -49,6 +50,9 @@ EXPERIMENTS: dict[str, Config] = {
     ),
     "impact-first-failure": Config(
         selector_cls=FirstFailureImpact, scheduler_cls=VariableWorkerScheduler
+    ),
+    "impact-dialect-entry": Config(
+        selector_cls=DialectEntryImpact, scheduler_cls=VariableWorkerScheduler
     ),
 }
 
