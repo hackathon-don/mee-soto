@@ -8,6 +8,7 @@ on:
     paths:
       - .github/workflows/benchmark-release.yml
       - tools/benchmark_release.py
+      - tools/ci_cpu_report.py
       - tools/ci_score.py
       - tools/ci_selection_report.py
 

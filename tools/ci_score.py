@@ -4,6 +4,7 @@ import argparse
 import ast
 from dataclasses import dataclass
 from decimal import Decimal
+from functools import cache
 from pathlib import Path
 import re
 from statistics import median
@@ -13,10 +14,12 @@ from tempfile import TemporaryDirectory
 
 if __package__:
     from .ci_cpu_report import PatchCpu, parse_cpu, render_cpu
-    from .ci_selection_report import read_schedule, selection_errors
+    from .ci_selection_report import (FalseChecks, FalseScheduling, false_checks, false_scheduling,
+                                     read_workers, render_false_work, selection_errors)
 else:
     from ci_cpu_report import PatchCpu, parse_cpu, render_cpu
-    from ci_selection_report import read_schedule, selection_errors
+    from ci_selection_report import (FalseChecks, FalseScheduling, false_checks, false_scheduling,
+                                    read_workers, render_false_work, selection_errors)
 
 
 def experiment_names(revision: str) -> list[str]:
@@ -94,6 +97,22 @@ class DiagnosticRun:
     score: Score
     cpu: dict[str, PatchCpu] | None
     schedule: dict[str, set[int]] | None
+    checks: FalseChecks | None = None
+    scheduling: FalseScheduling | None = None
+
+
+ANSWERS = Path("sample/answers.json")
+
+
+@cache
+def ideal_workers(experiment: str) -> dict[str, list[list[int]]]:
+    """The experiment's scheduler replaying only the known failures, on the host."""
+    result = subprocess.run(
+        [sys.executable, "main.py", "--experiment", experiment, "--data", "sample",
+         "schedule", "--ideal", str(ANSWERS)],
+        stdout=subprocess.PIPE, text=True, check=True,
+    )
+    return read_workers(result.stdout)
 
 
 def score_with_schedule(experiment: str, *, cpu_diagnostics: bool = False) -> DiagnosticRun:
@@ -101,17 +120,22 @@ def score_with_schedule(experiment: str, *, cpu_diagnostics: bool = False) -> Di
     with TemporaryDirectory(prefix="rwx-ci-") as out:
         options = (f"OUT={out}",) + (("CPU_DIAGNOSTICS=1",) if cpu_diagnostics else ())
         score_row = score(experiment, options=options)
+        schedule = scheduling = None
         try:
-            schedule = read_schedule(Path(out) / "e2e.jsonl")
-        except (OSError, ValueError, KeyError, TypeError):
-            schedule = None
-        cpu = None
+            workers = read_workers((Path(out) / "e2e.jsonl").read_text(encoding="utf-8"))
+            schedule = {patch: {test for worker in rows for test in worker} for patch, rows in workers.items()}
+            scheduling = false_scheduling(workers, ideal_workers(experiment), ANSWERS, Path("sample/tests.json"))
+        except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError):
+            pass
+        cpu = checks = None
         if cpu_diagnostics:
             try:
                 cpu = parse_cpu((Path(out) / "e2e.log").read_text(encoding="utf-8"))
+                # Selectors that run no checks emit no diagnostics.
+                checks = false_checks(cpu, ANSWERS) if cpu else None
             except (OSError, ValueError, KeyError, TypeError):
                 pass
-        return DiagnosticRun(score_row, cpu, schedule)
+        return DiagnosticRun(score_row, cpu, schedule, checks, scheduling)
 
 
 def median_run(runs: list[DiagnosticRun]) -> DiagnosticRun:
@@ -119,13 +143,14 @@ def median_run(runs: list[DiagnosticRun]) -> DiagnosticRun:
 
 
 def print_selection_errors(run: DiagnosticRun) -> None:
-    if run.schedule is not None:
-        try:
-            print(selection_errors(run.schedule, Path("sample/answers.json")))
-            return
-        except (OSError, ValueError, KeyError, TypeError):
-            pass
-    print("#### Selection errors (median run)\n\nPublic-sample selection errors unavailable for the median-total run.")
+    try:
+        if run.schedule is None:
+            raise ValueError("no schedule")
+        print(selection_errors(run.schedule, ANSWERS))
+    except (OSError, ValueError, KeyError, TypeError):
+        print("#### Selection errors (median run)\n\nPublic-sample selection errors unavailable for the median-total run.")
+    print()
+    print(render_false_work(run.checks, run.scheduling))
 
 
 def print_experiment(experiment: str, runs: list[Score], baseline: Score) -> None:

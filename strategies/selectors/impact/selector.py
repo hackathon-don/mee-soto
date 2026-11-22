@@ -635,6 +635,7 @@ class ImpactSelector:
                     "RWX_CPU_V1 " + json.dumps({
                         "commit": plan.cid,
                         "child_cpu": plan.child_cpu,
+                        "checks": len(plan.run),
                         **plan.diagnostics,
                     }, separators=(",", ":")),
                     file=sys.stderr,
