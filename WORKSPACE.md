@@ -271,6 +271,20 @@ docker run --rm --network none --cpus 8 --memory 8g --memory-swap 8g --read-only
 cp "$recording/operator-outcomes.json.gz" strategies/selectors/impact/maps/
 ```
 
+## Fixture entry map
+
+`impact-fixture-entries` narrows fixture-driven tests (`test_optimizer.py`, `test_transpile.py`, `test_serde.py`) to the entries a run-time edit of an existing `sqlglot/*.py` function can reach. `tools/record_fixture_entries.py` records, at the pinned SQLGlot commit, the code objects each entry enters in its own forked process; import, class setup and code outside the entry loop are charged to the whole test, and classes that load fixtures in setup are left out. The map header fingerprints the source, Python version, catalog and test/fixture files; any mismatch, unrecorded test or changed entry count runs the whole test. Regenerate on native Linux/amd64 after `make build`:
+
+```bash
+mkdir -p /tmp/fixture-entries
+docker run --rm --network none --read-only --tmpfs /tmp:rw,size=1g,mode=1777 \
+  --env HOME=/tmp --user "$(id -u):$(id -g)" \
+  -v "$PWD/tools:/repo/tools:ro" -v "$PWD/sample/tests.json:/repo/tests.json:ro" \
+  -v /tmp/fixture-entries:/out --entrypoint python blast-radius-entry \
+  /repo/tools/record_fixture_entries.py --catalog /repo/tests.json --output /out/fixture_entries.json.gz
+cp /tmp/fixture-entries/fixture_entries.json.gz strategies/selectors/
+```
+
 ## Held-out patch set
 
 The 30 public patches are tuning data. To check a selector on patches nothing
