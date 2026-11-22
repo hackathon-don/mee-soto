@@ -53,11 +53,16 @@ def false_checks(cpu, answers_path: Path) -> FalseChecks:
     failures = _failures(answers_path)
     if cpu.keys() - failures.keys():
         raise ValueError("CPU diagnostics cover unknown patches")
-    false = [(number, seconds) for patch, data in cpu.items()
-             for number, seconds in data.timed if number not in failures[patch]]
-    # Only completed checks count; tests left unrun after an early stop are not checks.
-    total = sum(len(data.timed) for data in cpu.values())
-    return FalseChecks(len(false), total, sum((seconds for _, seconds in false), Decimal(0)))
+    false = total = 0
+    seconds = Decimal(0)
+    for patch, data in cpu.items():
+        # Tests left unrun after an early stop are not checks.
+        checked = [n for n, _ in data.timed] if data.checked is None else data.checked
+        total += len(checked)
+        false += sum(n not in failures[patch] for n in checked)
+        # Per-check CPU exists only for children that exited cleanly.
+        seconds += sum((cpu for n, cpu in data.timed if n not in failures[patch]), Decimal(0))
+    return FalseChecks(false, total, seconds)
 
 
 def _simulated_ms(workers: list[list[int]], durations: dict[int, int]) -> int:

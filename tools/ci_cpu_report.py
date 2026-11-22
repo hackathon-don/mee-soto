@@ -18,6 +18,8 @@ class PatchCpu:
     child: Decimal
     timed: tuple[tuple[int, Decimal], ...]
     incomplete_children: int
+    # Every completed check, including ones whose child was later killed.
+    checked: tuple[int, ...] | None = None
 
 
 def _seconds(value):
@@ -46,7 +48,12 @@ def parse_cpu(log: str) -> dict[str, PatchCpu]:
         incomplete = obj["incomplete_children"]
         if type(incomplete) is not int or incomplete < 0:
             raise ValueError("invalid incomplete child count")
-        result[patch] = PatchCpu(_seconds(obj["child_cpu"]), tuple(timed), incomplete)
+        checked = obj.get("checked")
+        if checked is not None and (not isinstance(checked, list)
+                                    or any(type(n) is not int or n < 0 for n in checked)):
+            raise ValueError("invalid checked tests in CPU diagnostics")
+        result[patch] = PatchCpu(_seconds(obj["child_cpu"]), tuple(timed), incomplete,
+                                 None if checked is None else tuple(checked))
     return result
 
 

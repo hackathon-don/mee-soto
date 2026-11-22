@@ -408,6 +408,8 @@ def run_all(plans: list[Plan], ids, limits, deadline: float):
                             ch.diagnostics["timed"].append((n, msg["cpu"]))
                         if "cpu" in msg:
                             ch.plan.cpu[n] = msg["cpu"]
+                        if ch.plan.diagnostics is not None:
+                            ch.plan.diagnostics["checked"].append(n)
                         if not msg["ok"]:
                             ch.plan.failed.add(n)
                         if n in ch.pending:
@@ -621,7 +623,7 @@ class ImpactSelector:
                 plan.include = set(ms)
                 log(f"{cid}: analysis failed, running everything: {e!r}")
             if diagnostics:
-                plan.diagnostics = {"timed": [], "incomplete_children": 0}
+                plan.diagnostics = {"timed": [], "incomplete_children": 0, "checked": []}
             plans.append(plan)
 
         if any(p.run or p.pending_imports for p in plans):
