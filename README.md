@@ -1,7 +1,7 @@
 # Blast Radius selector
 
 A working submission for the Blast Radius track. The submitted image runs the
-`impact-variable-workers-matched` experiment (set in the `Dockerfile` `CMD`); the
+`impact-first-failure-tables-free-cpu` experiment (set in the `Dockerfile` `CMD`); the
 default config elsewhere runs every test on every commit. `ImpactSelector`
 narrows candidates with committed line-coverage maps and an AST diff, then runs the cheap ones against the
 patched tree inside the container and keeps the ones that fail. See
@@ -39,6 +39,11 @@ make e2e      # build, run once on the 30 sample commits under the scorer's limi
 make e2e-dev  # same flow on the host's native architecture for a faster local loop
 make check    # the output's format only
 ```
+
+To check a selector on patches it was not tuned on, `make holdout` builds and
+labels a held-out set from the pinned commit (once; it takes hours), then
+`make e2e-holdout` or `make e2e-full` (sample plus holdout) scores
+`EXPERIMENT` on it. See [WORKSPACE.md](WORKSPACE.md#held-out-patch-set).
 
 `make e2e` prints your simulated seconds and misses, which are exact for that output. The board adds the CPU seconds your container used and takes the middle of 3 runs, so expect it a little higher. See the [sample data rules](AGENTS.md#hard-rules) before changing the runner.
 

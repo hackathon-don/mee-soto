@@ -1,6 +1,6 @@
 """Selector and scheduler experiment configuration."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from strategies.schedulers import Scheduler
@@ -12,6 +12,8 @@ from strategies.selectors.all_tests import AllTestsSelector
 from strategies.selectors.impact import ImpactSelector
 from strategies.selectors.impact_first_failure import FirstFailureImpact
 from strategies.selectors.impact_first_failure_tables import FirstFailureTablesImpact
+from strategies.selectors.impact_first_failure_tables_free_cpu import FirstFailureTablesFreeCpuImpact
+from strategies.selectors.impact_first_failure_tables_free_cpu_outcomes import FirstFailureTablesFreeCpuOutcomesImpact
 from strategies.selectors.impact_first_failure_tables_outcomes import FirstFailureTablesOutcomesImpact
 from strategies.selectors.impact_fresh_copy import FreshTableCopyImpact
 from strategies.selectors.impact_individual_proof import IndividualProofImpact
@@ -27,6 +29,7 @@ class Config:
     scheduler_cls: type[Scheduler] = LptScheduler
     workers: int = 3
     data_dir: Path = Path("/data")
+    exit_after_output: bool = False
 
     def __post_init__(self) -> None:
         if not 1 <= self.workers <= MAX_WORKERS:
@@ -55,9 +58,18 @@ EXPERIMENTS: dict[str, Config] = {
     "impact-first-failure-tables-outcomes": Config(
         selector_cls=FirstFailureTablesOutcomesImpact, scheduler_cls=VariableWorkerScheduler
     ),
+    "impact-first-failure-tables-free-cpu": Config(
+        selector_cls=FirstFailureTablesFreeCpuImpact,
+        scheduler_cls=VariableWorkerScheduler,
+        exit_after_output=True,
+    ),
     "impact-first-failure-exact-packing": Config(
         selector_cls=FirstFailureImpact, scheduler_cls=ExactPackingScheduler
     ),
 }
+
+EXPERIMENTS["impact-first-failure-tables-free-cpu-outcomes"] = replace(
+    EXPERIMENTS["impact-first-failure-tables-free-cpu"], selector_cls=FirstFailureTablesFreeCpuOutcomesImpact,
+)
 
 DEFAULT_CONFIG = EXPERIMENTS["baseline"]

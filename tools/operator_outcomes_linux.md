@@ -30,13 +30,30 @@ the pinned SQLGlot source and test tree, the format and tracer versions,
 and the recorder's Python/platform identity. A missing or mismatched
 header disables the map. Regenerate on revision, catalog, test, runtime
 identity or tracer-version changes; pre-header maps must also be regenerated.
-The output has no patch answers or replay proofs. It is **shadow-only**:
-even a complete agreement cannot skip a check without the separate
-isolated-and-ordered replay proof required by active mode.
+The output has no patch answers or replay proofs. The original
+`impact-first-failure-tables-outcomes` still requires an ordered replay proof
+to skip a check.
 Each test's isolated recording includes its pytest fixture setup and teardown.
 Sites observed during module import or collection are listed separately. A test
 that hits the encounter cap in its parent or a spawned recorder is unknown at
 all sites, and its test number is listed under `capped`.
+
+### Run the opt-in isolated selector
+
+With the isolated map at the committed path, run:
+
+```bash
+make e2e EXPERIMENT=impact-first-failure-tables-free-cpu-outcomes \
+  DIAGNOSTIC_FLAGS='--env PYTHONHASHSEED=0 --env BR_OUTCOME_DIAGNOSTICS=1'
+```
+
+To try an external map, mount it read-only and set `BR_OUTCOME_MAP` to its
+container path. The new experiment narrows candidates only for pure supported
+operator changes, and leaves import probes intact. Missing or incomplete test
+records, capped tests, sites reached at import or collection, and inconclusive
+observations retain normal verification or inclusion. A missing or stale map
+uses free-CPU selection unchanged. This opt-in experiment accepts the same
+shared-verifier order risk as table-key narrowing; this is not an ordered proof.
 
 ### Public two-site pilot
 

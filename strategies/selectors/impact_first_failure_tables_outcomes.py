@@ -12,30 +12,34 @@ from .outcome_format import (
 )
 
 
+def load_outcome_map(catalog):
+    if os.environ.get("PYTHONHASHSEED") != "0" or sys.flags.hash_randomization:
+        return None
+    try:
+        path = os.environ.get("BR_OUTCOME_MAP")
+        if path is None:
+            path = COMMITTED_MAP if COMMITTED_MAP.is_file() else "/opt/maps/operator-outcomes.json.gz"
+        with gzip.open(path, "rt", encoding="utf-8") as stream:
+            data = json.load(stream)
+        if (data["header"] == trace_header(selector.SG, catalog)
+                and (not data.get("committed") or
+                     data["header"]["sqlglot_revision"]
+                     and data.get("workers_mode") in ("isolated", "persistent"))
+                and isinstance(data["complete"], list) and isinstance(data["skipped"], list)
+                and isinstance(data["batches"], list)):
+            return data
+    except (OSError, EOFError, ValueError, KeyError, TypeError) as error:
+        selector.log("outcome map unavailable:", repr(error))
+    return None
+
+
 class FirstFailureTablesOutcomesImpact(FirstFailureTablesImpact):
     def __init__(self, catalog, config):
         super().__init__(catalog, config)
         self.catalog = catalog
 
     def _map(self):
-        if os.environ.get("PYTHONHASHSEED") != "0" or sys.flags.hash_randomization:
-            return None
-        try:
-            path = os.environ.get("BR_OUTCOME_MAP")
-            if path is None:
-                path = COMMITTED_MAP if COMMITTED_MAP.is_file() else "/opt/maps/operator-outcomes.json.gz"
-            with gzip.open(path, "rt", encoding="utf-8") as stream:
-                data = json.load(stream)
-            if (data["header"] == trace_header(selector.SG, self.catalog)
-                    and (not data.get("committed") or
-                         data["header"]["sqlglot_revision"]
-                         and data.get("workers_mode") in ("isolated", "persistent"))
-                    and isinstance(data["complete"], list) and isinstance(data["skipped"], list)
-                    and isinstance(data["batches"], list)):
-                return data
-        except (OSError, EOFError, ValueError, KeyError, TypeError) as error:
-            selector.log("outcome map unavailable:", repr(error))
-        return None
+        return load_outcome_map(self.catalog)
 
     @staticmethod
     def _edit(patch):

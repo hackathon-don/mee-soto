@@ -22,13 +22,12 @@ from multiprocessing.context import SpawnProcess
 from multiprocessing.process import BaseProcess
 from pathlib import Path
 
-from .selectors.outcome_format import EXECUTOR_CLOCK_PATH, OPS, executor_clock_lines, site_id
+from .selectors.outcome_format import EXECUTOR_CLOCK_PATH, OPS, UNIXTOTIME_PATH, executor_clock_lines, site_id
 
 
 HOOK = "__rwx_record_comparison__"
 BATCH_REJECTION = "RWX_OUTCOME_BATCH_REJECT "
 CAP = 64
-UNIXTOTIME_PATH = "sqlglot/executor/env.py"
 UNIXTOTIME_HASH = "1c032c459b232a7b426a05fca18bb6007fe7d8d56b73b291630f570b5575b23e"
 UNIXTOTIME_LINE = 333
 DATETIME_TYPE = datetime.datetime

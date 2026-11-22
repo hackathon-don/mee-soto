@@ -14,6 +14,7 @@ TRACER_VERSION = 2
 COMMITTED_MAP = Path(__file__).parent / "impact/maps/operator-outcomes.json.gz"
 SOURCE_REVISION_FILE = ".blast-radius-sqlglot-rev"
 EXECUTOR_CLOCK_PATH = "sqlglot/executor/__init__.py"
+UNIXTOTIME_PATH = "sqlglot/executor/env.py"
 EXECUTOR_CLOCK_HASH = "a2149f32cf1912b05017ecbf033a0e2834f1da32eaa5a7c2e69572fc7d8fa94f"
 
 
@@ -74,10 +75,16 @@ def tree_digest(root):
 
 
 def changed_operator(path, before, after):
+    edits = changed_operators(path, before, after)
+    return edits[0] if len(edits) == 1 else None
+
+
+def changed_operators(path, before, after):
     if not path.startswith("sqlglot/") or not path.endswith(".py"):
-        return None
+        return []
     old, new = ast.parse(before), ast.parse(after)
     edits = []
+    old_gaps, new_gaps = [], []
 
     def visit(a, b):
         if type(a) is not type(b):
@@ -91,6 +98,8 @@ def changed_operator(path, before, after):
                     if x not in OPS or y not in OPS:
                         return False
                     edits.append((site_id(path, a, i), x, y))
+                    old_gaps.append((a.left if not i else a.comparators[i - 1], a.comparators[i], x))
+                    new_gaps.append((b.left if not i else b.comparators[i - 1], b.comparators[i], y))
             return visit(a.left, b.left) and visit(a.comparators, b.comparators)
         if isinstance(a, ast.AST):
             return all(visit(x, y) for (_, x), (_, y) in zip(ast.iter_fields(a), ast.iter_fields(b)))
@@ -98,20 +107,27 @@ def changed_operator(path, before, after):
             return len(a) == len(b) and all(visit(x, y) for x, y in zip(a, b))
         return a == b
 
-    if not visit(old, new) or len(edits) != 1:
-        return None
-    key, old_op, new_op = edits[0]
-    tokens = {"Is": ["is"], "IsNot": ["is", "not"], "Eq": ["=="], "NotEq": ["!="], "In": ["in"]}
-    a, b = ([t.string for t in tokenize.generate_tokens(io.StringIO(text).readline)]
-            for text in (before, after))
-    start = next((i for i, (x, y) in enumerate(zip(a, b)) if x != y), min(len(a), len(b)))
-    # Inserting/removing "not" retains a common "is" prefix.
-    if old_op in ("Is", "IsNot") and new_op in ("Is", "IsNot"):
-        start -= 1
-    if (start >= 0 and a[start:] == tokens[old_op] + b[start + len(tokens[new_op]):]
-            and b[start:start + len(tokens[new_op])] == tokens[new_op]):
-        return key, old_op, new_op
-    return None
+    if not visit(old, new) or not edits:
+        return []
+    spellings = {"Is": ["is"], "IsNot": ["is", "not"], "Eq": ["=="], "NotEq": ["!="], "In": ["in"]}
+    operator_tokens = {token for spelling in spellings.values() for token in spelling}
+
+    def without_edited_tokens(text, gaps):
+        lines = text.splitlines(keepends=True)
+        tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
+        omitted = set()
+        for left, right, op in gaps:
+            lo = (left.end_lineno, len(lines[left.end_lineno - 1].encode()[:left.end_col_offset].decode()))
+            hi = (right.lineno, len(lines[right.lineno - 1].encode()[:right.col_offset].decode()))
+            indexes = [i for i, token in enumerate(tokens)
+                       if lo <= token.start and token.end <= hi and token.string in operator_tokens]
+            if [tokens[i].string for i in indexes] != spellings[op] or omitted.intersection(indexes):
+                return None
+            omitted.update(indexes)
+        return [token.string for i, token in enumerate(tokens) if i not in omitted]
+
+    a = without_edited_tokens(before, old_gaps)
+    return edits if a is not None and a == without_edited_tokens(after, new_gaps) else []
 
 
 def classify(data, site, old_op, new_op, number, complete, skipped):
