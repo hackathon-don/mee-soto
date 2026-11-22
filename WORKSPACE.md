@@ -31,6 +31,9 @@ failure, and the selector's own CPU time. Lower is better.
 | `make schedule` | Scheduler only, on the host, over `out/picks.jsonl`, then the sample scorer | `out/schedule-saved.jsonl` |
 | `make schedule SOURCE=ideal` | Scheduler only, over the sample's known failing tests | `out/schedule-ideal.jsonl` |
 | `make test` | Unit tests on the host | |
+| `make holdout` | Generates the [held-out patch set](#held-out-patch-set) once and labels it by running the full catalog in the dev image; resumes | `out/holdout/commits/`, `out/holdout/labels.jsonl` |
+| `make e2e-holdout` | `EXPERIMENT` on the labeled held-out set, in sample-sized batches, native dev image; `DEFERRAL=off` disables heavy-test deferral | `out/holdout/eval/<experiment>/` |
+| `make e2e-full` | The sample plus the held-out set on one dev image, one report | `out/holdout/eval/<experiment>/` |
 
 Container stderr is printed to the terminal and saved to `out/e2e.log`,
 `out/e2e-dev.log`, `out/check.log`, or `out/select.log`, respectively.
