@@ -12,6 +12,7 @@ from strategies.selectors.all_tests import AllTestsSelector
 from strategies.selectors.impact import ImpactSelector
 from strategies.selectors.impact_first_failure import FirstFailureImpact
 from strategies.selectors.impact_first_failure_tables import FirstFailureTablesImpact
+from strategies.selectors.impact_first_failure_tables_free_cpu import FirstFailureTablesFreeCpuImpact
 from strategies.selectors.impact_fresh_copy import FreshTableCopyImpact
 from strategies.selectors.impact_individual_proof import IndividualProofImpact
 from strategies.selectors.impact_optimizer_transcript import OptimizerTranscriptImpact
@@ -26,6 +27,7 @@ class Config:
     scheduler_cls: type[Scheduler] = LptScheduler
     workers: int = 3
     data_dir: Path = Path("/data")
+    exit_after_output: bool = False
 
     def __post_init__(self) -> None:
         if not 1 <= self.workers <= MAX_WORKERS:
@@ -50,6 +52,11 @@ EXPERIMENTS: dict[str, Config] = {
     ),
     "impact-first-failure-tables": Config(
         selector_cls=FirstFailureTablesImpact, scheduler_cls=VariableWorkerScheduler
+    ),
+    "impact-first-failure-tables-free-cpu": Config(
+        selector_cls=FirstFailureTablesFreeCpuImpact,
+        scheduler_cls=VariableWorkerScheduler,
+        exit_after_output=True,
     ),
     "impact-first-failure-exact-packing": Config(
         selector_cls=FirstFailureImpact, scheduler_cls=ExactPackingScheduler
