@@ -3,6 +3,7 @@
 import argparse
 import ast
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 import gzip
 import json
 import os
@@ -15,6 +16,7 @@ import time
 
 from .selectors.map_format import catalog_records, catalog_sha256
 from .selectors.outcome_format import OPS, identity, site_id, tree_digest
+from .trace_operator_outcomes import BATCH_REJECTION
 
 
 def sites(root, requested):
@@ -64,27 +66,48 @@ def collect(root, tests, requested, indexed, jobs, budget, timeout, batches):
         def run(item):
             mode, key, target = item
             report = None
+            batch = batches[key] if mode == "batch" else None
+
+            def rejected(reason):
+                name = batch.get("commit", f"#{key + 1}")
+                print(f"Outcome batch {name} ({len(batch['tests'])} checks): {reason}",
+                      file=sys.stderr, flush=True)
+
             if time.monotonic() >= deadline:
+                if batch is not None:
+                    rejected("build budget expired before batch started")
                 return mode, key, report
             result = directory / f"{mode}-{key}.json"
             argv = [sys.executable, "-m", "strategies.trace_operator_outcomes",
                     mode, str(root), target, str(result), *flags]
-            try:
-                trace_env = env if mode == "batch" else dict(env, PYTHON_CPU_COUNT="2")
-                with subprocess.Popen(argv, cwd=root, env=trace_env, stdout=subprocess.DEVNULL,
-                                      stderr=subprocess.DEVNULL, start_new_session=True) as child:
-                    try:
-                        code = child.wait(timeout=max(0, min(deadline - time.monotonic(), timeout)))
-                    except subprocess.TimeoutExpired:
+            with (tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace")
+                  if batch is not None else nullcontext(subprocess.DEVNULL)) as stderr:
+                reason = "trace did not produce a complete report"
+                try:
+                    trace_env = env if batch is not None else dict(env, PYTHON_CPU_COUNT="2")
+                    with subprocess.Popen(argv, cwd=root, env=trace_env, stdout=subprocess.DEVNULL,
+                                          stderr=stderr, start_new_session=True) as child:
+                        limit = max(0, min(deadline - time.monotonic(), timeout))
                         try:
-                            os.killpg(child.pid, signal.SIGKILL)
-                        except ProcessLookupError:
-                            pass
-                        return mode, key, report
-                if code == 0:
-                    report = json.loads(result.read_text())
-            except (OSError, ValueError):
-                pass
+                            code = child.wait(timeout=limit)
+                        except subprocess.TimeoutExpired:
+                            reason = f"trace timed out after {limit:.1f}s"
+                            try:
+                                os.killpg(child.pid, signal.SIGKILL)
+                            except ProcessLookupError:
+                                pass
+                            code = None
+                    if code == 0 and result.is_file():
+                        report = json.loads(result.read_text())
+                    elif code not in (None, 0):
+                        reason = f"trace exited with status {code}"
+                except (OSError, ValueError) as error:
+                    reason = f"trace error: {error}"
+                if batch is not None and report is None:
+                    stderr.seek(0)
+                    reason = next((line.removeprefix(BATCH_REJECTION).rstrip()
+                                   for line in stderr if line.startswith(BATCH_REJECTION)), reason)
+                    rejected(reason)
             return mode, key, report
 
         completed, skipped, rows, verified = [], set(), {}, []

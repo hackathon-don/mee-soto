@@ -63,17 +63,18 @@ from pathlib import Path
 prefix = "RWX_OUTCOMES_V1 "
 rows = (json.loads(line.removeprefix(prefix))
         for line in Path(sys.argv[1]).read_text().splitlines() if line.startswith(prefix))
-batches = [row["batch"] for row in rows if row["commit"] in ("2haz", "66ks") and row["batch"]]
+batches = [dict(row["batch"], commit=row["commit"])
+           for row in rows if row["commit"] in ("2haz", "66ks") and row["batch"]]
 assert batches, "no replayable verifier batches"
 Path(sys.argv[2]).write_text(json.dumps(batches))
 PY
 docker_trace --output /out/pilot-verified.json.gz --batch-file /out/batches.json \
   --site sqlglot/dialects/dialect.py:1280 --site sqlglot/executor/context.py:53 \
-  "${pilot[@]}" | tee "$out/pilot-verified-build.log"
+  "${pilot[@]}" 2>&1 | tee "$out/pilot-verified-build.log"
 
 # Separate, bounded full-site trace. Review coverage as well as elapsed time.
 docker_trace --output /out/full.json.gz --all-sites --batch-file /out/batches.json --budget-seconds 540 \
-  | tee "$out/full-build.log"
+  2>&1 | tee "$out/full-build.log"
 ```
 
 After reviewing shadow coverage and batch completeness, choose one map.

@@ -22,6 +22,7 @@ from .selectors.outcome_format import OPS, site_id
 
 
 HOOK = "__rwx_record_comparison__"
+BATCH_REJECTION = "RWX_OUTCOME_BATCH_REJECT "
 CAP = 64
 SIMPLE = (type(None), bool, int, float, str, bytes)
 OPERATORS = {
@@ -135,21 +136,32 @@ def relevant(frame):
     return module in ("sqlglot", "tests") or module.startswith(("sqlglot.", "tests."))
 
 
-def abort(*args, **kwargs):
+def batch_rejection(reason):
+    print(BATCH_REJECTION + reason, file=sys.stderr, flush=True)
+
+
+def abort(*args, reason="unsupported process start", **kwargs):
+    batch_rejection(reason)
     os._exit(125)
 
 
 class Recorder(importlib.abc.MetaPathFinder):
-    def __init__(self, root, targets):
+    def __init__(self, root, targets, diagnose=False):
         self.root, self.targets = root, targets
         self.paths = None if targets is None else {site.split(":", 1)[0] for site in targets}
         self.rows, self.skipped = {}, set()
         self.unknown = False
+        self.diagnose = diagnose
         self.loading = None
+
+    def reject(self, reason):
+        if not self.unknown and self.diagnose:
+            batch_rejection(reason)
+        self.unknown = True
 
     def install(self):
         if any(name == "sqlglot" or name.startswith("sqlglot.") for name in sys.modules):
-            abort()
+            abort(reason="SQLGlot was imported before the recorder was installed")
         sys.path.insert(0, str(self.root))
         sys.meta_path.insert(0, self)
         sys.addaudithook(self.audit)
@@ -164,7 +176,7 @@ class Recorder(importlib.abc.MetaPathFinder):
             ) or (caller == "multiprocessing.queues" and cls is threading.Thread
                   and thread.name == "QueueFeederThread")
             if not pool_admin:
-                self.unknown = True
+                self.reject(f"unexpected thread start from {caller}")
             return original(thread, *args, **kwargs)
 
         threading.Thread.start = start
@@ -182,23 +194,25 @@ class Recorder(importlib.abc.MetaPathFinder):
                     module in ("os", "posix") and name in ("urandom", "getrandom") or
                     isinstance(owner, type) and owner.__module__ == "datetime" and not iso_parse or
                     getattr(type(owner), "__module__", "") in ("_random", "numpy.random._generator")):
-                self.unknown = True
+                self.reject(f"nondeterministic call {module or type(owner).__name__}.{name} "
+                            f"at {frame.f_code.co_filename}:{frame.f_lineno}")
         elif event == "call" and frame.f_back and relevant(frame.f_back):
             module = frame.f_globals.get("__name__")
             if (module in ("random", "secrets") or module == "inspect"
                     and frame.f_code.co_name in ("getsource", "getsourcelines", "currentframe")):
-                self.unknown = True
+                self.reject(f"unsupported call {module}.{frame.f_code.co_name} "
+                            f"at {frame.f_back.f_code.co_filename}:{frame.f_back.f_lineno}")
 
     def audit(self, event, args):
         if event in ("subprocess.Popen", "os.fork", "os.forkpty", "os.posix_spawn",
                      "os.spawn", "os.exec", "os.system", "cpython.PyInterpreterState_New"):
-            abort()
+            abort(reason=f"unsupported process event {event}")
         if event == "open" and isinstance(args[0], (str, bytes)):
             path = os.path.abspath(os.fsdecode(args[0]))
             if path == self.loading or not path.startswith(str(self.root / "sqlglot") + os.sep):
                 return
             if path.endswith((".py", ".pyc")) and relevant(sys._getframe(1)):
-                self.unknown = True
+                self.reject(f"direct read of SQLGlot source {path}")
 
     def find_spec(self, fullname, path, target=None):
         if fullname != "sqlglot" and not fullname.startswith("sqlglot."):
@@ -207,11 +221,11 @@ class Recorder(importlib.abc.MetaPathFinder):
         if spec is None:
             return None
         if not isinstance(spec.loader, importlib.machinery.SourceFileLoader) or spec.origin is None:
-            self.unknown = True
+            self.reject(f"unsupported loader for {fullname}")
             return spec
         origin = Path(spec.origin)
         if not origin.is_relative_to(self.root):
-            self.unknown = True
+            self.reject(f"unexpected origin for {fullname}: {origin}")
             return spec
         rel = origin.relative_to(self.root).as_posix()
         if self.paths is None or rel in self.paths:
@@ -226,7 +240,7 @@ class Recorder(importlib.abc.MetaPathFinder):
                     if key is not None:
                         self.rows[key] = None
                     if chain:
-                        self.unknown = True
+                        self.reject(f"unsupported chained comparison operand at {key or op}")
                 elif key is not None:
                     row = json.dumps([a, b, left is right, [alternate(o, left, right) for o in OPS]],
                                      separators=(",", ":"))
@@ -238,7 +252,7 @@ class Recorder(importlib.abc.MetaPathFinder):
                 if key is not None:
                     self.rows[key] = None
                 if chain:
-                    self.unknown = True
+                    self.reject(f"chained comparison observation failed at {key or op}")
         return OPERATORS[op](left, right)
 
     def report(self):
@@ -277,7 +291,7 @@ class Loader(importlib.machinery.SourceFileLoader):
         names = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
         names.update(node.arg for node in ast.walk(tree) if isinstance(node, ast.arg))
         if HOOK in names:
-            self.recorder.unknown = True
+            self.recorder.reject(f"comparison observer name collision in {self.rel}")
             return compile(source, self.path, "exec", dont_inherit=True)
         rewrite = Rewrite(self.rel, names, self.recorder.targets)
         tree = rewrite.visit(tree)
@@ -381,7 +395,8 @@ def trace_batch(root, manifest, result, sites):
     from .selectors.impact.selector import IMPORT_PROBE_TIMEOUT, preimport
 
     batch = json.loads(Path(manifest).read_text())
-    recorder = Recorder(root, None if sites is None else set(json.loads(Path(sites).read_text())))
+    recorder = Recorder(root, None if sites is None else set(json.loads(Path(sites).read_text())),
+                        diagnose=True)
     preimport()
     recorder.install()
     workers = Workers(root, result, sites)
@@ -391,11 +406,24 @@ def trace_batch(root, manifest, result, sites):
     records = [json.loads(line) for line in events.read_text().splitlines()]
     checked = [event for event in records if "d" in event]
     imported = [event for event in records if "i" in event]
-    if (records and "cpu_total" in records[-1]
-            and sorted(event["d"] for event in checked) == sorted(test[0] for test in batch["tests"])
-            and [event["i"] for event in imported] == batch["imports"]
-            and all(event["ok"] for event in checked + imported)
-            and workers.merge(recorder) and not recorder.unknown and sys.getprofile() == recorder.profile):
+    if recorder.unknown:
+        return
+    failed = next((event for event in records if event.get("ok") is False), None)
+    if failed is not None and "i" in failed:
+        batch_rejection(f"import probe failed or timed out: {failed['i']}")
+    elif failed is not None and "d" in failed:
+        batch_rejection(f"check {failed['d']} failed or timed out")
+    elif not records or "cpu_total" not in records[-1]:
+        batch_rejection("verifier did not report normal completion")
+    elif sorted(event["d"] for event in checked) != sorted(test[0] for test in batch["tests"]):
+        batch_rejection(f"incomplete check results ({len(checked)}/{len(batch['tests'])})")
+    elif [event["i"] for event in imported] != batch["imports"]:
+        batch_rejection(f"incomplete or out-of-order import probes ({len(imported)}/{len(batch['imports'])})")
+    elif sys.getprofile() != recorder.profile:
+        batch_rejection("recorder profile hook was replaced")
+    elif not workers.merge(recorder):
+        batch_rejection("worker report missing, incomplete, or invalid")
+    else:
         result.write_text(json.dumps(recorder.report()))
 
 
